@@ -478,17 +478,17 @@ flowchart TD
         E11["Guided Flow 中 Figma 失敗"] --> E11R["⚠️ 降級為純文字模式<br/>之後可用 --to-figma 補推"]
     end
 
-    style E1R fill:#4a1c1c,stroke:#D45B5B
-    style E2R fill:#4a1c1c,stroke:#D45B5B
-    style E3R fill:#4a1c1c,stroke:#D45B5B
-    style E5R fill:#4a1c1c,stroke:#D45B5B
-    style E6R fill:#4a1c1c,stroke:#D45B5B
-    style E8R fill:#4a1c1c,stroke:#D45B5B
-    style E10R fill:#4a1c1c,stroke:#D45B5B
-    style E4R fill:#4a3c1c,stroke:#E5A84B
-    style E9R fill:#4a3c1c,stroke:#E5A84B
-    style E11R fill:#4a3c1c,stroke:#E5A84B
-    style E7R fill:#1c3a4a,stroke:#7EBF8E
+    style E1R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E2R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E3R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E5R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E6R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E8R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E10R fill:#4a1c1c,stroke:#D45B5B,color:#fff
+    style E4R fill:#4a3c1c,stroke:#E5A84B,color:#fff
+    style E9R fill:#4a3c1c,stroke:#E5A84B,color:#fff
+    style E11R fill:#4a3c1c,stroke:#E5A84B,color:#fff
+    style E7R fill:#1c3a4a,stroke:#7EBF8E,color:#fff
 ```
 
 ### Quick Reference / 指令速查表
