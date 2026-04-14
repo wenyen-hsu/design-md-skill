@@ -1,0 +1,15 @@
+# Local test/demo artifacts — not part of the skill distribution
+test-project/
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
