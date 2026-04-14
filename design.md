@@ -349,7 +349,10 @@ Display the Figma file URL to the user as a clickable markdown link:
 > - **Preview - [project type] (Light)** — light mode page mockup
 > - **Preview - Components & States** — buttons, alerts, forms, and badges showing all functional colors
 >
-> Every color in the palette appears on at least one preview page. Adjust any colors you'd like, then say **'ready'** and I'll read back your final choices."
+> Every color in the palette appears on at least one preview page.
+>
+> After adjusting colors, say **'refresh preview'** to rebuild the preview pages with your updated palette.
+> Say **'ready'** when you're done to generate DESIGN.md."
 
 ### Step 5: Wait for user to adjust in Figma
 
@@ -357,6 +360,40 @@ Wait for the user to respond. They might say:
 - "ready" / "done" / "looks good" → proceed to Step 6
 - "I changed the primary to..." → acknowledge and proceed to Step 6
 - "can you change X to Y" → update the Figma file using `mcp__figma__use_figma`, then wait again
+- "refresh preview" / "update preview" / "refresh" → **rebuild the preview pages with updated colors** (see below), then wait again
+
+**Refreshing preview pages:**
+
+When the user asks to refresh/update the previews, follow this process:
+
+1. **Read current color variables from Figma:**
+   Call `mcp__figma__get_variable_defs` with the `fileKey` and `nodeId: "0:1"`.
+   Parse the returned variables into a color map (variable name → hex value).
+
+2. **Compare with original palette:**
+   Show the user which colors changed:
+   > "I see these color changes:
+   > - primary/desert-sand: #C4A882 → #B8956E
+   > - accent/burnished-gold: #D4A54A → #E8B84A
+   > Rebuilding preview pages..."
+
+3. **Delete existing preview page content:**
+   For each preview page, use `mcp__figma__use_figma` to find the page by name and remove all its children:
+   ```javascript
+   const page = figma.root.children.find(p => p.name === "Preview - ...");
+   await figma.setCurrentPageAsync(page);
+   for (const child of [...page.children]) child.remove();
+   ```
+
+4. **Rebuild all 3 preview pages:**
+   Re-run the same logic as Step 4e, but using the **updated color map** read from Figma variables instead of the original proposed palette. Each page should be rebuilt in its own `mcp__figma__use_figma` call.
+
+5. **Take screenshots and show to user:**
+   Call `mcp__figma__get_screenshot` for each preview page and display them.
+   > "Preview pages updated with your new colors. Here's how they look now:"
+
+6. **Wait again:**
+   Return to Step 5 and wait for the user's next action. They can adjust more, refresh again, or say "ready".
 
 ### Step 6: Read back final colors from Figma
 
@@ -604,9 +641,10 @@ Before confirming, offer:
 If yes:
 1. If a Figma Design System file already exists (check if DESIGN.md has a Figma URL comment at the top), update the existing file's color variables using `mcp__figma__use_figma`.
 2. If no existing Figma file, create a new one (same as Guided Flow Step 4).
-3. Show the Figma URL and wait for user to adjust.
-4. Read back updated colors from Figma (same as Guided Flow Step 6).
-5. Update the before/after comparison with Figma-adjusted values.
+3. If the Figma file has existing preview pages, rebuild them with the new colors (same refresh logic as Guided Flow Step 5 "Refreshing preview pages").
+4. Show the Figma URL and wait for user to adjust. The user can say "refresh preview" to rebuild previews after further adjustments.
+5. Read back updated colors from Figma (same as Guided Flow Step 6).
+6. Update the before/after comparison with Figma-adjusted values.
 
 If no (or Figma MCP not available), proceed directly to Step 7.
 
@@ -865,6 +903,7 @@ Ask the user what they want to change (e.g., "warmer tones", "darker background"
     const variable = figma.variables.getVariableById(variableId);
     variable.setValueForMode(modeId, {r: R/255, g: G/255, b: B/255, a: 1});
     ```
+- If preview pages exist in the file, rebuild them with the new colors (same refresh logic as Guided Flow Step 5 "Refreshing preview pages")
 - Re-read from Figma to confirm changes took effect
 - Generate DESIGN.md from the confirmed state
 
