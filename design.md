@@ -25,7 +25,7 @@ Default Flow (Figma-guided):
   The default flow:
   1. Asks about your project, mood, color preferences, and fonts
   2. Generates a proposed color palette
-  3. Creates a Figma file with color swatches you can see and adjust
+  3. Creates a Figma file with color swatches and preview mockups (dark, light, components)
   4. Waits for you to fine-tune colors in Figma
   5. Reads back your final colors and generates DESIGN.md
 
@@ -190,11 +190,166 @@ Call `mcp__figma__use_figma` again to create variables:
 2. For each color, create a COLOR variable with the hex value
 3. Bind each color rectangle's fill to its corresponding variable
 
-**4e. Show the Figma URL:**
+**4e. Create product preview mockup pages:**
+Create **3 separate Figma pages** that together showcase **every single color** in the palette. Each page targets a different color group so no color goes unused. Use multiple `mcp__figma__use_figma` calls (one per page) to keep code manageable.
+
+The goal: the user should be able to flip through the pages and see every color from the palette applied in a realistic UI context — not just as abstract swatches.
+
+**IMPORTANT:** Before building each page, cross-check the palette and verify that every color (primary, secondary, accent, backgrounds, surfaces, all text hierarchy levels, and all functional state colors) appears on at least one page. If any color is missing, find a natural place to include it.
+
+---
+
+**Page 1: "Preview - [project type] (Dark)"**
+
+The main page mockup using the dark/primary color scheme. Based on the project type from Q1.
+
+Use `mcp__figma__use_figma` to create a new page and build the layout. Use absolute positioning (not auto-layout with FILL) to avoid layout errors. The frame should be 1440px wide.
+
+**Colors that MUST appear on this page:**
+- Dark background color → page background
+- Dark surface color → nav bar, card backgrounds, footer
+- Primary color → CTA buttons, key highlights
+- Accent color → decorative elements, hover indicators, number accents
+- Secondary accent → card borders, dividers, subtle lines
+- Primary text color (light) → headings, titles
+- Secondary text color → body text, descriptions
+- Tertiary text color → muted text, captions, footer text
+
+**Layout by project type:**
+
+*Landing page:*
+- Top nav bar (surface bg) with logo text, 3-4 nav links, CTA button (primary color bg, dark text)
+- Hero section (dark bg) with accent decorative line, small label (primary color), large heading (primary text), subheading (secondary text), CTA button
+- Features section (surface bg) with section label (primary color), 3 feature cards (dark bg, secondary accent border) each with number accent (accent color, low opacity), title (primary text), description (secondary text)
+- Testimonial section (dark bg) with decorative line (primary color), quote text (primary text), attribution (tertiary text)
+- Footer (surface bg) with logo (primary color), copyright (tertiary text), subtle top border (secondary accent)
+
+*Dashboard:*
+- Left sidebar (dark bg) with logo, menu items (secondary text), active item (primary color highlight)
+- Top bar (surface bg) with page title (primary text), avatar circle (accent color)
+- Main area (dark bg) with 4 stat cards (surface bg, secondary accent border): label (secondary text), value (primary text), indicator dot (accent color)
+- Larger card below (surface bg) with chart/table placeholder, section title (primary text)
+- Status indicators using tertiary text for timestamps
+
+*E-commerce:*
+- Top nav (surface bg) with logo, search bar placeholder (dark bg, secondary accent border), cart icon placeholder (accent)
+- Hero banner area (primary or accent color gradient/solid)
+- Product grid: product cards (surface bg) with image placeholder (dark bg rect), product name (primary text), price (primary color), description (secondary text), add-to-cart button (primary color bg)
+
+*Blog / Portfolio:*
+- Minimal top nav (surface bg) with logo (primary color), links (secondary text)
+- Featured post hero: large image placeholder (dark bg), overlay heading (primary text), date/meta (tertiary text)
+- Content cards grid (surface bg) with thumbnails (dark bg rects), titles (primary text), excerpts (secondary text)
+
+*Mobile app:*
+- Frame sized 390x844
+- Status bar, app header (surface bg) with title (primary text), icon circles (accent)
+- Content cards stacked (surface bg, secondary accent border), titles (primary text), descriptions (secondary text)
+- Bottom tab bar (surface bg) with icon circles, active tab (primary color)
+
+---
+
+**Page 2: "Preview - [project type] (Light)"**
+
+The same page concept as Page 1, but using the light mode palette. This ensures light background, light surface, and dark text colors are all showcased.
+
+Use `mcp__figma__use_figma` to create a new page and build a layout similar to Page 1 but with inverted color mapping.
+
+**Colors that MUST appear on this page:**
+- Light background color → page background
+- Light surface color → nav bar, card backgrounds, footer
+- Dark text color (e.g., Ink Walnut) → headings, titles
+- Primary color → CTA buttons (same as dark mode)
+- Accent color → decorative elements, highlights
+- Secondary accent → card borders, dividers
+- Secondary text color → body text, descriptions
+- Tertiary text color → muted text, placeholders
+
+**Layout:** Same structure as Page 1, but:
+- Page background uses the lightest background color
+- Cards/surfaces use the light surface color
+- Headings use the darkest text color
+- Body text uses secondary text or tertiary text as appropriate
+- CTA buttons still use the primary color
+- Borders and dividers use secondary accent at low opacity
+
+If the user chose dark mode only (not "both"), still create this page but note: "Light mode preview — for reference even if your project is dark-mode-only."
+
+---
+
+**Page 3: "Preview - Components & States"**
+
+A component showcase page that focuses on **functional state colors** (success, warning, error) and interactive element states. This page uses a neutral background (dark or light depending on the primary mode) and displays various UI components.
+
+Use `mcp__figma__use_figma` to create a new page and build the component showcase.
+
+**Colors that MUST appear on this page:**
+- Success color → success alert banner, confirmation button, positive badge, check indicator
+- Warning color → warning alert banner, caution badge, attention indicator
+- Error color → error alert banner, destructive/danger button, error badge, validation message
+- Primary color → primary buttons (default state), active input borders
+- Accent color → highlighted badges, toggle active state
+- Primary text color → component labels and titles
+- Secondary text color → component descriptions
+- Tertiary text color → placeholder text in inputs, helper text
+- Background color → page background
+- Surface color → component container backgrounds
+- Secondary accent → default borders, dividers between sections
+
+**Components to include:**
+
+*Buttons row:*
+- Primary button (primary color bg, dark/light text)
+- Secondary button (outlined with primary color border, primary color text)
+- Success button (success color bg)
+- Danger button (error color bg)
+- Disabled button (tertiary color bg, muted text)
+
+*Alert banners:*
+- Success alert: success color left border or bg tint, success icon placeholder circle, title (primary text), message (secondary text)
+- Warning alert: warning color left border or bg tint, warning icon placeholder circle, title, message
+- Error alert: error color left border or bg tint, error icon placeholder circle, title, message
+
+*Form inputs:*
+- Default input (surface bg, secondary accent border, placeholder in tertiary text)
+- Focused input (surface bg, primary color border/ring)
+- Error input (surface bg, error color border, error message text in error color below)
+- Filled input with success indicator (surface bg, success color check mark or border)
+
+*Badges / Tags:*
+- A row of small badge rectangles: primary badge (primary color), accent badge (accent color), success badge (success color), warning badge (warning color), error badge (error color) — each with white or dark text inside
+
+*Notification cards:*
+- A small card with success color accent showing a positive notification
+- A small card with warning color accent showing a warning
+- A small card with error color accent showing an error
+
+*Status indicators:*
+- A row of small circles: success (success color), warning (warning color), error (error color), neutral (tertiary color) — with labels
+
+**Layout:** Organize components in clearly labeled sections with section titles (primary text), arranged vertically with comfortable spacing. Use a neutral background. Each section should have a subtle container (surface bg) grouping related components.
+
+---
+
+**General rules for all 3 pages:**
+- Use absolute positioning for frames within the viewport to avoid auto-layout FILL errors
+- Use the chosen font family for all text (load with `figma.loadFontAsync`)
+- Use placeholder text that suggests real content, not lorem ipsum
+- Keep mockups simple — they are color/mood previews, not full designs
+- Frame width: 1440px for desktop pages, 390px for mobile app pages
+- Each `mcp__figma__use_figma` call should handle one page completely
+
+**4f. Show the Figma URL:**
 Display the Figma file URL to the user as a clickable markdown link:
-> "Your color palette is ready in Figma: [Design System - ProjectName](figma-url)
+> "Your color palette and preview pages are ready in Figma: [Design System - ProjectName](figma-url)
 >
-> Open the file and adjust any colors you'd like -- you can change the color variables or directly edit the swatches. Say **'ready'** when you're done, and I'll read back your final choices."
+> The file has 4 pages:
+> - **Color Palette** — color swatches with variables you can adjust
+> - **Preview - [project type] (Dark)** — dark mode page mockup
+> - **Preview - [project type] (Light)** — light mode page mockup
+> - **Preview - Components & States** — buttons, alerts, forms, and badges showing all functional colors
+>
+> Every color in the palette appears on at least one preview page. Adjust any colors you'd like, then say **'ready'** and I'll read back your final choices."
 
 ### Step 5: Wait for user to adjust in Figma
 
@@ -603,6 +758,16 @@ For each component style in DESIGN.md, create:
 Create a row of rectangles showing each spacing value in the scale, with labels.
 
 Organize everything with auto-layout frames, consistent spacing, and clear section headers.
+
+**4f. Create product preview mockup pages:**
+Create 3 additional preview pages that together showcase **every color** in DESIGN.md. Determine the project type from DESIGN.md's "Visual Theme & Atmosphere" section (look for keywords like "landing page", "dashboard", "e-commerce", "blog", "portfolio", "mobile app"). If the project type cannot be determined, default to a landing page layout.
+
+Follow the same multi-page mockup rules as described in the Guided Flow Step 4e:
+- **Page 1: "Preview - [project type] (Dark)"** — main page mockup using dark/primary background, surface, primary, accent, secondary accent, and all text hierarchy colors
+- **Page 2: "Preview - [project type] (Light)"** — same layout in light mode using light background, light surface, dark text colors
+- **Page 3: "Preview - Components & States"** — UI component showcase using all functional state colors (success, warning, error) plus primary/accent in buttons, alerts, form inputs, badges, and status indicators
+
+Cross-check the palette before building: every color must appear on at least one page.
 
 ### Step 5: Create Figma variables (optional)
 
