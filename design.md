@@ -1,0 +1,927 @@
+---
+description: Generate, update, or apply a DESIGN.md design system file for any project
+---
+
+Generate, update, or apply a DESIGN.md design system file.
+
+User input: $ARGUMENTS
+
+## Handle `--help`
+
+If user input contains `--help` or `-h`, do NOT execute any actions. Instead, display the following help text and stop:
+
+```
+Usage: /design [description] [options]
+
+Create a design system for your project. Claude guides you through preferences,
+generates a color palette, creates a Figma file with visual swatches you can
+adjust, reads back your final choices, and generates DESIGN.md.
+
+Default Flow (Figma-guided):
+  /design                    Start guided flow: Q&A → palette → Figma → DESIGN.md
+  /design <description>      Skip Q&A, use description as direction for palette
+                             Example: /design modern minimalist SaaS with indigo accents
+
+  The default flow:
+  1. Asks about your project, mood, color preferences, and fonts
+  2. Generates a proposed color palette
+  3. Creates a Figma file with color swatches you can see and adjust
+  4. Waits for you to fine-tune colors in Figma
+  5. Reads back your final colors and generates DESIGN.md
+
+Other Modes:
+  --from-url <url>           Extract design tokens from a live website.
+                             Example: /design --from-url https://linear.app
+
+  --from-figma <url>         Extract design tokens from an existing Figma file.
+                             Example: /design --from-figma https://figma.com/design/abc123/MyDesign
+
+  --update-colors [desc]     Update the color palette in an existing DESIGN.md.
+                             Offers to push changes to Figma for visual fine-tuning.
+                             Example: /design --update-colors "warmer tones, switch to green"
+
+  --apply                    Apply DESIGN.md tokens to project source files.
+                             Auto-detects Tailwind config, CSS files, theme files.
+                             Example: /design --apply
+
+  --to-figma [url]           Push DESIGN.md to Figma as a visual design system page.
+                             Creates color swatches, typography samples, and variables.
+                             Example: /design --to-figma
+
+  --sync-figma <url>         Interactive sync: read from Figma, refine, push back.
+                             Example: /design --sync-figma https://figma.com/design/abc/MyApp
+
+Options:
+  --no-figma                 Skip Figma integration, generate DESIGN.md as text only.
+  --dark                     Include a dark mode color variant section.
+  --framework <name>         Target framework hint: tailwind, css-vars, remotion.
+  --output <path>            Output path (default: ./DESIGN.md).
+  --help, -h                 Show this help message.
+
+Examples:
+  /design                                    Full guided flow with Figma
+  /design bold playful app with orange        Guided flow, skip Q&A
+  /design --no-figma clean dashboard          Text-only, no Figma
+  /design --from-url https://stripe.com       Extract from website
+  /design --from-figma https://figma.com/...  Extract from Figma file
+  /design --update-colors "more muted"        Update existing palette
+  /design --apply --framework tailwind        Apply tokens to project
+  /design --to-figma                          Push DESIGN.md to Figma
+  /design --sync-figma https://figma.com/...  Bidirectional Figma sync
+```
+
+## Instructions
+
+Parse user input to detect the active mode:
+- If input contains `--from-url`, extract the URL after it. Mode = **from-url**.
+- If input contains `--from-figma`, extract the Figma URL after it. Mode = **from-figma**.
+- If input contains `--update-colors`, Mode = **update-colors**. Any text after it (that is not another flag) is the change description.
+- If input contains `--apply`, Mode = **apply**.
+- If input contains `--to-figma`, optionally extract a Figma URL after it. Mode = **to-figma**.
+- If input contains `--sync-figma`, extract the Figma URL after it. Mode = **sync-figma**.
+- If input contains `--no-figma`, Mode = **generate-text-only**. Any remaining text (excluding other flags) is the description.
+- If input contains `--interactive`, treat as default mode (same as no flags). Mode = **guided**.
+- If none of the above flags are present, Mode = **guided**. If input contains text, use it as a description to skip Q1-Q2 of the Q&A. If input is empty, start the full Q&A.
+
+Also parse these options from any mode:
+- `--dark` (boolean) — include dark mode variant
+- `--framework <name>` — target framework hint
+- `--output <path>` (default: `./DESIGN.md`) — output file path
+
+---
+
+## Mode: Guided Flow (default)
+
+This is the primary mode. It runs when the user provides no flags, a description, or `--interactive`.
+
+### Step 1: Check for existing DESIGN.md
+
+Check if a DESIGN.md already exists at the output path. If it does, ask the user:
+> "A DESIGN.md already exists. Would you like to overwrite it, or update specific sections?"
+
+If they want to overwrite, proceed. If update, ask which sections to regenerate.
+
+### Step 2: Gather design preferences (Q&A)
+
+If the user provided a description (e.g., `/design modern SaaS with blue accents`), use it as the creative direction and skip Q1 and Q2. Go straight to Q3.
+
+If no description was provided, ask these questions one at a time. Wait for each answer before asking the next.
+
+**Q1: Project type**
+> "What kind of project is this? (e.g., web app, e-commerce, landing page, dashboard, mobile app, video/Remotion, portfolio, blog)"
+
+**Q2: Mood & atmosphere**
+> "Describe the visual mood in 3-5 words. Examples: 'clean professional minimal', 'bold playful energetic', 'luxurious dark elegant', 'warm friendly approachable'"
+
+**Q3: Color preferences**
+> "Any specific colors you want to use or avoid? Any existing brand colors to include? (e.g., 'I love deep blues and warm grays', 'brand color is #FF6B35', 'avoid bright reds')"
+
+**Q4: Light or dark mode?**
+> "Light mode, dark mode, or both?"
+
+**Q5: Typography style**
+> "What typography style fits your project? (serif = traditional/elegant, sans-serif = modern/clean, monospace = technical/developer) Any specific fonts you'd like?"
+
+**Q6: Reference sites (optional)**
+> "Any websites or brands whose visual style you admire? I can extract design cues from them. (optional, press Enter to skip)"
+
+If the user provides a URL, use WebFetch to extract design tokens from it as supplementary input.
+
+**Q7: Target framework**
+> "What framework are you building with? (Next.js/Tailwind, plain CSS, Remotion, other)"
+
+### Step 3: Generate proposed palette
+
+Based on the Q&A answers (or description), generate a harmonious color palette. Show it to the user as a text preview:
+
+> "Here's the proposed palette based on your preferences:
+>
+> **Primary Foundation**
+> - Midnight Indigo (#4F46E5) -- primary brand color, CTAs
+> - Soft Lavender (#EEF2FF) -- background
+> - Cloud White (#FAFAFA) -- surface
+>
+> **Accent & Interactive**
+> - Electric Violet (#7C3AED) -- accent, hover states
+>
+> **Text Hierarchy**
+> - Ink Black (#1E1E2E) -- headings
+> - Slate Gray (#64748B) -- body text
+> - Silver Mist (#CBD5E1) -- borders, dividers
+>
+> **Functional States**
+> - Success Green (#10B981)
+> - Warning Amber (#F59E0B)
+> - Error Red (#EF4444)
+>
+> I'll now create a Figma file with these as visual swatches so you can fine-tune them."
+
+### Step 4: Create Figma file with color swatches
+
+**4a. Get Figma user info:**
+Call `mcp__figma__whoami` to get the user's plan key.
+If the user has multiple plans, ask which one to use.
+
+**4b. Create a new Figma file:**
+Call `mcp__figma__create_new_file` with:
+- `fileName`: "Design System - [current project folder name]"
+- `planKey`: from whoami result
+- `editorType`: "design"
+
+Save the returned `fileKey` and file URL.
+
+**4c. Create the color palette page:**
+Call `mcp__figma__use_figma` with the `fileKey` to create the visual color swatches. The JavaScript code should:
+
+1. Create a main frame titled "Color Palette" with auto-layout (vertical, spacing 40)
+2. For each color category (Primary Foundation, Accent, Text, Functional States), create a section frame with:
+   - A section title text node (category name, 24px, bold)
+   - A horizontal auto-layout frame containing color swatches
+3. For each color, create a swatch frame (auto-layout, vertical, spacing 8) containing:
+   - A rectangle (80x80px) filled with the color
+   - Text: descriptive name (14px, bold)
+   - Text: hex code (12px, regular)
+   - Text: functional role (11px, gray)
+4. Set the page background to white for clarity
+
+**4d. Create Figma variables:**
+Call `mcp__figma__use_figma` again to create variables:
+1. Create a variable collection named "Design Tokens"
+2. For each color, create a COLOR variable with the hex value
+3. Bind each color rectangle's fill to its corresponding variable
+
+**4e. Show the Figma URL:**
+Display the Figma file URL to the user as a clickable markdown link:
+> "Your color palette is ready in Figma: [Design System - ProjectName](figma-url)
+>
+> Open the file and adjust any colors you'd like -- you can change the color variables or directly edit the swatches. Say **'ready'** when you're done, and I'll read back your final choices."
+
+### Step 5: Wait for user to adjust in Figma
+
+Wait for the user to respond. They might say:
+- "ready" / "done" / "looks good" → proceed to Step 6
+- "I changed the primary to..." → acknowledge and proceed to Step 6
+- "can you change X to Y" → update the Figma file using `mcp__figma__use_figma`, then wait again
+
+### Step 6: Read back final colors from Figma
+
+**6a. Read updated variables:**
+Call `mcp__figma__get_variable_defs` with the `fileKey` and `nodeId: "0:1"`.
+
+**6b. Take a screenshot:**
+Call `mcp__figma__get_screenshot` with the `fileKey` and `nodeId: "0:1"`.
+
+**6c. Show what changed:**
+Compare the original proposed palette with the values read back from Figma.
+If there are differences, display them:
+> "Here's what changed:
+> - Primary: Midnight Indigo (#4F46E5) → Deep Ocean (#2563EB)
+> - Background: Soft Lavender (#EEF2FF) → Cool Mist (#F0F4FF)
+>
+> All other colors stayed the same."
+
+If nothing changed:
+> "Looks like you kept the original palette. Proceeding with these colors."
+
+Ask for final confirmation:
+> "Ready to generate DESIGN.md with these colors?"
+
+### Step 7: Generate DESIGN.md
+
+Using the confirmed palette and Q&A answers, generate a complete DESIGN.md following the **DESIGN.md Template** defined below.
+
+If `--dark` was specified or user chose "both" in Q4, include a dark mode variant in the color section.
+
+Write the file to the output path.
+
+### Step 8: CLAUDE.md integration
+
+Check if a `CLAUDE.md` file exists in the project root. If it does, suggest the user add this line:
+```
+Design system rules are defined in DESIGN.md. Always reference it for colors, typography, spacing, and component styles. Never use values not defined in DESIGN.md.
+```
+If no `CLAUDE.md` exists, mention that they can create one with this instruction for best results.
+
+### Step 9: Display summary and next steps
+
+Show:
+- Final color palette (names + hex codes)
+- Font choices
+- Figma file URL
+- DESIGN.md output path
+- Next steps:
+> "Your design system is ready! Next you can:
+> - `/design --apply` to apply tokens to your project files
+> - `/design --update-colors` to change colors later (with Figma round-trip)
+> - `/design --to-figma` to update the Figma reference page"
+
+### Figma MCP not available
+
+If any Figma MCP call fails in Step 4 (e.g., Figma desktop not running, MCP not connected), fall back gracefully:
+> "Figma MCP is not connected. I'll generate DESIGN.md directly from the proposed palette.
+> To use the Figma integration, make sure Figma desktop is running with the MCP plugin enabled.
+> You can push to Figma later with `/design --to-figma`."
+
+Then skip Steps 4-6 and go straight to Step 7 (generate DESIGN.md from the proposed palette).
+
+---
+
+## Mode: Text-Only Generation (`--no-figma`)
+
+Generates DESIGN.md directly without any Figma integration. This is the fallback for users without Figma MCP.
+
+### Step 1: Check for existing DESIGN.md
+
+Same as Guided Flow Step 1.
+
+### Step 2: Gather design preferences
+
+If a description was provided, use it directly. Otherwise, run the same Q&A as Guided Flow Step 2.
+
+### Step 3: Generate DESIGN.md
+
+Using the description or Q&A answers, generate a complete DESIGN.md following the **DESIGN.md Template**.
+Write to output path.
+
+### Step 4: CLAUDE.md integration and summary
+
+Same as Guided Flow Steps 8-9, but without the Figma URL in the summary.
+
+---
+
+## Mode: Generate from URL (`--from-url`)
+
+### Step 1: Check for existing DESIGN.md
+
+Same as Generate mode Step 1.
+
+### Step 2: Extract design tokens from the URL
+
+Use `WebFetch` with this prompt:
+> "Extract all visual design characteristics from this webpage. I need: (1) All colors used with hex codes -- identify primary, secondary, accent, background, surface, text, and border colors. (2) Font families used for headings and body text. (3) Font sizes and weights observed. (4) Spacing patterns and padding values. (5) Border radius values. (6) Shadow/elevation styles. (7) Overall visual mood and atmosphere in 2-3 sentences. Return structured data, not prose."
+
+### Step 3: Fallback if needed
+
+If WebFetch returns insufficient color data (fewer than 3 distinct colors identified), attempt a fallback:
+1. Check if `~/.cloudflare/.env` exists with credentials.
+2. If yes, use the Cloudflare Browser Rendering `/json` endpoint:
+   ```bash
+   source ~/.cloudflare/.env
+   curl -s -X POST \
+     "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/browser-rendering/json" \
+     -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "url": "<URL>",
+       "prompt": "Extract all design tokens: colors (with hex codes and roles), font families, font sizes, spacing values, border-radius values, shadow definitions, and overall visual mood"
+     }'
+   ```
+3. If credentials don't exist or the API returns empty, proceed with whatever WebFetch returned and fill in gaps with reasonable defaults inspired by the site's mood.
+
+### Step 4: Generate DESIGN.md
+
+Using the extracted tokens, generate a complete DESIGN.md following the **DESIGN.md Template**.
+
+Map extracted hex values to evocative descriptive names (e.g., `#0A0A0A` becomes "Ink Black" not "color-1").
+Fill in any sections where extraction was insufficient with reasonable defaults that match the site's aesthetic.
+
+### Step 5: Write file, CLAUDE.md check, display summary
+
+Same as Generate mode Steps 3-4.
+
+---
+
+## Mode: Generate from Figma (`--from-figma`)
+
+### Step 1: Parse Figma URL
+
+Extract `fileKey` and `nodeId` from the Figma URL:
+- `figma.com/design/:fileKey/:fileName?node-id=:nodeId` — convert `-` to `:` in nodeId
+- `figma.com/design/:fileKey/branch/:branchKey/:fileName` — use branchKey as fileKey
+- If no `node-id` in URL, use `0:1` as default (root node)
+
+If the URL doesn't match these patterns, show an error:
+> "Please provide a valid Figma URL (e.g., https://figma.com/design/abc123/MyDesign?node-id=0-1)"
+
+### Step 2: Check for existing DESIGN.md
+
+Same as Generate mode Step 1.
+
+### Step 3: Extract design tokens from Figma
+
+Call these Figma MCP tools to gather comprehensive design data:
+
+**3a. Get design variables (colors, spacing tokens):**
+Call `mcp__figma__get_variable_defs` with `fileKey` and `nodeId`.
+This returns structured variables like `{'icon/default/secondary': '#949494'}`.
+Extract all color variables, spacing variables, and any other design tokens.
+
+**3b. Get visual design context:**
+Call `mcp__figma__get_design_context` with `fileKey` and `nodeId`.
+This returns reference code, a screenshot, and contextual metadata including:
+- Colors used in the design
+- Font families, sizes, and weights
+- Spacing and layout patterns
+- Component structures
+
+**3c. Get a screenshot for visual reference:**
+Call `mcp__figma__get_screenshot` with `fileKey` and `nodeId`.
+Use this to visually confirm the design's mood and atmosphere.
+
+**3d. Search for design system components (optional):**
+Call `mcp__figma__search_design_system` with `query: "color"` and `fileKey` to find existing design system color definitions.
+Then search for `query: "button"`, `query: "input"`, `query: "card"` to find component patterns.
+
+### Step 4: Show extracted tokens to user
+
+Before generating DESIGN.md, display the extracted tokens to the user:
+> "I found these design tokens in your Figma file:
+>
+> **Colors:** [list hex codes and their Figma variable names]
+> **Fonts:** [list font families found]
+> **Components:** [list component types detected]
+>
+> Would you like me to generate DESIGN.md with these, or would you like to adjust anything first?"
+
+Wait for user confirmation. If they want to adjust, take their feedback before proceeding.
+
+### Step 5: Generate DESIGN.md
+
+Synthesize the Figma data into a complete DESIGN.md following the **DESIGN.md Template**.
+- Map Figma variable names to evocative descriptive names (e.g., `primary/blue-500` becomes "Ocean Depth (#2563EB)")
+- Preserve exact hex values from Figma -- do NOT approximate
+- Use the screenshot to inform the Visual Theme & Atmosphere section
+- Fill in any sections not covered by Figma data with reasonable defaults matching the design's mood
+
+### Step 6: Write file, CLAUDE.md check, display summary
+
+Same as Generate mode Steps 3-4.
+
+### Error handling
+
+If any Figma MCP tool fails, show:
+> "Could not access Figma file. The Figma MCP may not be connected.
+> Make sure Figma desktop is running with the MCP plugin, or configure Figma remote MCP.
+> Alternatively, try `/design --from-url` with the live site URL, or use `/design --interactive`."
+
+---
+
+## Mode: Update Colors (`--update-colors`)
+
+### Step 1: Verify DESIGN.md exists
+
+Check if DESIGN.md exists at the project root (or `--output` path). If not, show:
+> "No DESIGN.md found in the project root. Run `/design` first to generate one."
+
+### Step 2: Read and display current palette
+
+Read the existing DESIGN.md. Extract and display the "Color Palette & Roles" section in a clean, readable format showing each color name, hex code, and role.
+
+### Step 3: Determine changes
+
+If a change description was provided after `--update-colors` (e.g., "warmer tones, switch to green primary"), use that as direction.
+
+If no description was provided, ask:
+> "What changes would you like to make to the color palette? (e.g., 'warmer tones', 'switch primary to green', 'add a purple accent', 'make it darker')"
+
+### Step 4: Generate new palette
+
+Generate a new Color Palette section that:
+- Respects the change request
+- Maintains color harmony across the full palette
+- Preserves the same functional roles (primary, secondary, accent, text, background, etc.)
+- Keeps the same evocative naming style
+
+### Step 5: Show before/after comparison
+
+Display a clear before/after comparison of the palette:
+```
+Before:                          After:
+Primary: Deep Indigo (#4F46E5)   Primary: Forest Emerald (#059669)
+...                              ...
+```
+
+### Step 6: Offer Figma round-trip (optional)
+
+Before confirming, offer:
+> "Would you like me to push these colors to Figma so you can visually fine-tune them first?"
+
+If yes:
+1. If a Figma Design System file already exists (check if DESIGN.md has a Figma URL comment at the top), update the existing file's color variables using `mcp__figma__use_figma`.
+2. If no existing Figma file, create a new one (same as Guided Flow Step 4).
+3. Show the Figma URL and wait for user to adjust.
+4. Read back updated colors from Figma (same as Guided Flow Step 6).
+5. Update the before/after comparison with Figma-adjusted values.
+
+If no (or Figma MCP not available), proceed directly to Step 7.
+
+### Step 7: Confirm and write
+
+Ask the user to confirm the final changes. If confirmed, update ONLY the Color Palette section in DESIGN.md, leaving all other sections unchanged.
+
+### Step 8: Optionally update source files
+
+Ask:
+> "Would you also like to update colors in your project source files to match? This will scan for CSS files, Tailwind config, and theme files."
+
+If yes:
+1. Build a mapping of old hex values to new hex values from the before/after comparison.
+2. Scan the project for files containing the old hex values:
+   - `tailwind.config.*`
+   - `**/*.css`
+   - `**/*.tsx`, `**/*.jsx` (inline styles only)
+   - `theme.*`, `src/theme.*`
+3. For each file with matches, show the proposed diff.
+4. Ask for confirmation before modifying each file.
+5. Apply the changes and show a summary.
+
+---
+
+## Mode: Apply to Project (`--apply`)
+
+### Step 1: Verify DESIGN.md exists
+
+Same as Update Colors Step 1.
+
+### Step 2: Parse design tokens
+
+Read and parse DESIGN.md to extract all design tokens:
+- Colors (name, hex, role)
+- Typography (font families, sizes, weights)
+- Spacing scale
+- Border radii
+- Shadows
+- Breakpoints
+
+### Step 3: Detect framework and target files
+
+Scan the project to detect the framework and find design-relevant files:
+
+1. **Tailwind** — look for `tailwind.config.{js,ts,mjs}`. If found:
+   - Update `theme.extend.colors` with color tokens
+   - Update `theme.extend.fontFamily` with typography tokens
+   - Update `theme.extend.spacing` with spacing tokens
+   - Update `theme.extend.borderRadius` with radii tokens
+   - Update `theme.extend.boxShadow` with shadow tokens
+
+2. **CSS Custom Properties** — look for `**/globals.css`, `**/variables.css`, `**/theme.css`. If found:
+   - Generate or update `:root { }` block with CSS custom properties
+   - If `--dark` or dark mode section exists, generate `[data-theme="dark"] { }` or `@media (prefers-color-scheme: dark) { }` block
+
+3. **Theme files** — look for `theme.{js,ts}`, `src/theme.{js,ts}`. If found:
+   - Update theme object with design tokens
+
+4. **Remotion** — look for `remotion.config.ts` or check `package.json` for remotion dependency. If found:
+   - Suggest a constants file `src/design-tokens.ts` exporting all tokens as JS constants
+   - Suggest inline style patterns using these constants
+
+Use `--framework` flag as an override if provided.
+
+### Step 4: Show proposed changes
+
+For each file to be modified, display:
+- The file path
+- A clear diff showing current vs. proposed content
+- An explanation of what each change does
+
+### Step 5: Confirm and apply
+
+Ask the user to confirm before applying changes to each file.
+Apply the confirmed changes and show a summary of all modifications.
+
+### Error handling
+
+If no design-relevant files are found:
+> "No CSS, Tailwind config, or theme files found in this project. Would you like me to create a CSS custom properties file or a Tailwind config?"
+
+---
+
+## Mode: Push to Figma (`--to-figma`)
+
+Creates a visual design system reference page in Figma from your DESIGN.md file. This lets you see your design tokens as visual swatches and share them with designers.
+
+### Step 1: Verify DESIGN.md exists
+
+Check if DESIGN.md exists at the project root (or `--output` path). If not, show:
+> "No DESIGN.md found. Run `/design` first to generate one, then use `--to-figma` to push it to Figma."
+
+### Step 2: Parse DESIGN.md tokens
+
+Read and parse DESIGN.md to extract all design tokens:
+- Colors (name, hex, role)
+- Typography (font families, sizes, weights)
+- Spacing scale values
+- Border radii
+- Shadows
+
+### Step 3: Determine target Figma file
+
+If a Figma URL was provided after `--to-figma`:
+- Parse `fileKey` and optional `nodeId` from the URL
+- The design system page will be added to this existing file
+
+If no URL was provided:
+- Call `mcp__figma__whoami` to get user info and available plans
+- Call `mcp__figma__create_new_file` with:
+  - `fileName`: "Design System - [project folder name]"
+  - `planKey`: from whoami result (if multiple plans, ask user which one)
+  - `editorType`: "design"
+- Show the new file URL to the user
+
+### Step 4: Create design system page in Figma
+
+Use `mcp__figma__use_figma` to execute Figma Plugin API JavaScript that creates a structured design system page. The code should:
+
+**4a. Create a new page called "Design System":**
+```javascript
+const page = figma.createPage();
+page.name = "Design System";
+await figma.setCurrentPageAsync(page);
+```
+
+**4b. Create Color Palette section:**
+For each color in DESIGN.md, create a frame containing:
+- A rectangle filled with the color (80x80px)
+- Text label with the descriptive name
+- Text label with the hex code
+- Text label with the functional role
+Group colors by category (Primary, Accent, Text, Functional States).
+Arrange in a grid layout with proper spacing.
+
+**4c. Create Typography section:**
+For each typography level in DESIGN.md, create:
+- A text node showing "The quick brown fox jumps over the lazy dog"
+- Styled with the correct font family, size, and weight
+- A label showing the level name and specs
+
+**4d. Create Component Specs section:**
+For each component style in DESIGN.md, create:
+- A visual representation (e.g., a rectangle with the specified border-radius and shadow)
+- Labels showing the specs (radius, shadow, padding values)
+
+**4e. Create Spacing Scale section:**
+Create a row of rectangles showing each spacing value in the scale, with labels.
+
+Organize everything with auto-layout frames, consistent spacing, and clear section headers.
+
+### Step 5: Create Figma variables (optional)
+
+Ask the user:
+> "Would you also like me to create Figma variables from your DESIGN.md tokens? This makes them reusable across your Figma file."
+
+If yes, use `mcp__figma__use_figma` to create variables:
+```javascript
+// Create a variable collection
+const collection = figma.variables.createVariableCollection("Design System");
+// Add color variables
+const colorVar = figma.variables.createVariable("primary", collection.id, "COLOR");
+colorVar.setValueForMode(collection.defaultModeId, {r: R/255, g: G/255, b: B/255, a: 1});
+// Repeat for all colors...
+```
+
+### Step 6: Display summary
+
+Show:
+- Figma file URL (as a clickable link)
+- Number of color swatches created
+- Number of typography samples created
+- Number of variables created (if applicable)
+- Remind user they can now use these in Figma designs
+
+---
+
+## Mode: Interactive Figma Sync (`--sync-figma`)
+
+This is the most interactive mode. It creates a bidirectional workflow where you pick/adjust colors in Figma, Claude reads them back, and generates an accurate DESIGN.md. Great for designers who want to visually explore colors before committing.
+
+### Step 1: Parse Figma URL
+
+Extract `fileKey` and `nodeId` from the provided Figma URL.
+- `figma.com/design/:fileKey/:fileName?node-id=:nodeId` — convert `-` to `:` in nodeId
+- If no `node-id` in URL, use `0:1` as default
+- If URL is missing, show error: "Please provide a Figma URL: `/design --sync-figma <figma-url>`"
+
+### Step 2: Read current state from Figma
+
+Call these tools in parallel to gather the current state:
+
+**2a. Get design variables:**
+Call `mcp__figma__get_variable_defs` with `fileKey` and `nodeId`.
+
+**2b. Get visual context:**
+Call `mcp__figma__get_design_context` with `fileKey` and `nodeId`.
+
+**2c. Get screenshot:**
+Call `mcp__figma__get_screenshot` with `fileKey` and `nodeId`.
+
+### Step 3: Present findings and ask for direction
+
+Display to the user:
+> "Here's what I found in your Figma file:
+>
+> **Colors detected:**
+> - [list each color with hex code and where it appears]
+>
+> **Fonts detected:**
+> - [list font families and sizes]
+>
+> **Screenshot:** [show the screenshot]
+>
+> What would you like to do?
+> 1. **Use these colors as-is** — I'll generate DESIGN.md from what's in Figma
+> 2. **Adjust in Figma first** — Go adjust colors in Figma, then tell me when ready and I'll re-read
+> 3. **Let me suggest changes** — Tell me what you want to change and I'll update both DESIGN.md and Figma
+> 4. **Start fresh** — Describe your desired aesthetic and I'll create a palette, push it to Figma, then generate DESIGN.md"
+
+### Step 4: Handle user choice
+
+**Choice 1: Use as-is**
+Generate DESIGN.md from the extracted Figma data, same as `--from-figma` mode Steps 5-6.
+
+**Choice 2: Adjust in Figma first**
+Tell the user:
+> "Go ahead and adjust your colors in Figma. When you're done, just say 'ready' or 'done' and I'll re-read your file."
+
+When the user says they're ready:
+- Re-call `mcp__figma__get_variable_defs` and `mcp__figma__get_design_context` to get updated values
+- Show the updated colors and ask for confirmation
+- Generate DESIGN.md from the updated data
+
+**Choice 3: Suggest changes**
+Ask the user what they want to change (e.g., "warmer tones", "darker background", "add a purple accent").
+- Generate a new color palette based on the request, using existing Figma colors as a starting point
+- Show the proposed palette to the user
+- If approved, push the new colors to Figma using `mcp__figma__use_figma`:
+  - Find existing color rectangles/fills and update them
+  - Or if the file has Figma variables, update the variable values:
+    ```javascript
+    const collections = figma.variables.getLocalVariableCollections();
+    // Find and update color variables
+    const variable = figma.variables.getVariableById(variableId);
+    variable.setValueForMode(modeId, {r: R/255, g: G/255, b: B/255, a: 1});
+    ```
+- Re-read from Figma to confirm changes took effect
+- Generate DESIGN.md from the confirmed state
+
+**Choice 4: Start fresh**
+Ask for an aesthetic description, then:
+1. Generate a complete color palette
+2. Show the palette to the user for approval
+3. Push the approved palette to Figma using `mcp__figma__use_figma`:
+   - Create color swatches on a new page (same as `--to-figma` Step 4b)
+   - Create Figma variables for each color
+4. Generate DESIGN.md from the pushed palette
+5. Show Figma file URL and DESIGN.md summary
+
+### Step 5: Iterative refinement loop
+
+After generating DESIGN.md, ask:
+> "DESIGN.md has been generated. Would you like to:
+> - **Refine** — adjust specific colors or sections
+> - **Push updates to Figma** — sync any DESIGN.md changes back to Figma
+> - **Done** — finish the sync workflow"
+
+If **Refine**: Go back to Step 3, but this time show the DESIGN.md palette instead of raw Figma data.
+
+If **Push updates to Figma**: Use `mcp__figma__use_figma` to update Figma variables/swatches to match the current DESIGN.md palette.
+
+If **Done**: Show final summary and exit.
+
+### Error handling
+
+- If Figma MCP is not available, show: "Figma MCP is not connected. Make sure Figma desktop is running with the MCP plugin enabled, or set up Figma remote MCP. You can use `/design --from-url` or `/design --interactive` instead."
+- If reading from Figma returns no colors, show: "No colors found in this Figma file. Would you like to start fresh with `/design --interactive` or push a new palette with `/design --to-figma`?"
+
+---
+
+## DESIGN.md Template
+
+When generating a DESIGN.md, produce a file with EXACTLY these sections in this order. Follow these rules strictly:
+
+### Naming rules
+- Every color entry MUST use this format: `**Descriptive Name** (#HEXCODE) -- functional purpose`
+- Use evocative, natural language names: "Midnight Ink", "Sun-kissed Coral", "Whisper Gray" -- NOT "color-primary", "bg-1", "gray-300"
+- Use natural language for design descriptions: "whisper-soft shadow" NOT "shadow-sm", "subtly rounded corners" NOT "8px" or "rounded-md"
+- Always explain the functional purpose: when and where to use each token
+
+### Color harmony rules
+- Generate a coherent, harmonious palette -- colors should work together
+- Minimum required: 1 primary, 1 secondary, 1 accent, background, surface, 3+ text hierarchy colors, success, warning, error
+- Ensure sufficient contrast between text and background colors (WCAG AA minimum)
+- If `--dark` flag is set, include a parallel dark mode palette subsection
+
+### Template sections
+
+```markdown
+# DESIGN.md
+
+## 1. Visual Theme & Atmosphere
+
+[2-4 sentences capturing the mood, energy, and aesthetic philosophy. Use evocative language
+that conveys the emotional tone. Mention design density (airy vs. compact), visual rhythm,
+and the intended feeling for users.]
+
+**Key Characteristics:**
+- [4-6 bullet points defining the visual language]
+
+## 2. Color Palette & Roles
+
+### Primary Foundation
+- **[Name]** (#HEXCODE) -- [functional purpose: when/where to use]
+- **[Name]** (#HEXCODE) -- [functional purpose]
+
+### Accent & Interactive
+- **[Name]** (#HEXCODE) -- [functional purpose: CTAs, active states, links]
+
+### Typography & Text Hierarchy
+- **[Name]** (#HEXCODE) -- [primary text, headlines]
+- **[Name]** (#HEXCODE) -- [secondary text, descriptions]
+- **[Name]** (#HEXCODE) -- [tertiary: borders, dividers, placeholders]
+
+### Functional States
+- **[Name]** (#HEXCODE) -- [success: confirmations, positive indicators]
+- **[Name]** (#HEXCODE) -- [warning: caution states, attention needed]
+- **[Name]** (#HEXCODE) -- [error: failures, destructive actions, critical alerts]
+
+[If --dark flag: ### Dark Mode Variant with parallel palette]
+
+## 3. Typography Rules
+
+**Primary Font Family:** [Font Name]
+**Character:** [1-2 sentence description of the font's personality]
+
+[Optional: **Secondary Font Family:** for headings or accents]
+
+### Hierarchy & Weights
+| Level | Weight | Size | Line Height | Letter Spacing | Usage |
+|-------|--------|------|-------------|----------------|-------|
+| Display / H1 | [weight] | [size] | [value] | [value] | [where to use] |
+| H2 | [weight] | [size] | [value] | [value] | [where to use] |
+| H3 | [weight] | [size] | [value] | [value] | [where to use] |
+| H4 | [weight] | [size] | [value] | [value] | [where to use] |
+| Body | [weight] | [size] | [value] | normal | [where to use] |
+| Small / Caption | [weight] | [size] | [value] | [value] | [where to use] |
+| CTA / Button | [weight] | [size] | [value] | [value] | [where to use] |
+
+## 4. Component Stylings
+
+### Buttons
+- **Shape:** [description of corner treatment]
+- **Primary:** [background color name + hex], [text color], padding [values]
+- **Secondary:** [style description -- outlined, ghost, etc.]
+- **Hover state:** [transition description]
+- **Focus state:** [accessibility description]
+- **Disabled state:** [visual treatment]
+
+### Cards & Containers
+- **Corners:** [description + radius value]
+- **Background:** [color name + hex]
+- **Shadow:** [default and hover states]
+- **Padding:** [internal spacing description]
+- **Border:** [if applicable]
+
+### Navigation
+- **Style:** [layout description]
+- **Active indicator:** [how active state is shown]
+- **Typography:** [weight, casing, spacing for nav items]
+
+### Inputs & Forms
+- **Border:** [color, width]
+- **Background:** [default and focus states]
+- **Focus state:** [border/ring treatment]
+- **Error state:** [visual treatment]
+- **Corners:** [should match buttons for consistency]
+- **Padding:** [comfortable touch target sizing]
+
+### [Additional components as relevant to the project type]
+
+## 5. Layout Principles
+
+### Grid & Structure
+- **Max content width:** [value]
+- **Grid system:** [columns, gutters]
+- **Common layouts:** [typical column arrangements]
+
+### Spacing Scale
+- **Base unit:** [value, typically 4px or 8px]
+- **Scale:** [list of common spacing values with names]
+- **Section margins:** [space between major sections]
+- **Component gaps:** [space between related elements]
+
+### Alignment & Rhythm
+- [Text alignment rules]
+- [Visual weight distribution]
+- [Whitespace philosophy]
+
+## 6. Depth & Elevation
+
+### Shadow Scale
+- **Subtle:** [shadow definition] -- [when to use]
+- **Medium:** [shadow definition] -- [when to use]
+- **Pronounced:** [shadow definition] -- [when to use]
+- **Overlay:** [shadow definition] -- [when to use]
+
+### Surface Hierarchy
+- [Description of how surfaces stack and relate]
+
+## 7. Do's and Don'ts
+
+### Do
+- [Rule with brief rationale]
+- [Rule with brief rationale]
+- [Rule with brief rationale]
+- [Rule with brief rationale]
+
+### Don't
+- [Anti-pattern with brief rationale]
+- [Anti-pattern with brief rationale]
+- [Anti-pattern with brief rationale]
+- [Anti-pattern with brief rationale]
+
+## 8. Responsive Behavior
+
+### Breakpoints
+| Name | Width | Columns | Notes |
+|------|-------|---------|-------|
+| Mobile | <768px | [cols] | [adaptation notes] |
+| Tablet | 768-1024px | [cols] | [adaptation notes] |
+| Desktop | 1024-1440px | [cols] | [adaptation notes] |
+| Large | >1440px | [cols] | [adaptation notes] |
+
+### Touch & Accessibility
+- Minimum touch target: 44x44px
+- [Typography scaling strategy]
+- [Component adaptation rules]
+
+## 9. Agent Prompt Guide
+
+### Quick Reference
+| Token | Value | Use |
+|-------|-------|-----|
+| Primary | #HEXCODE | [brief use] |
+| Secondary | #HEXCODE | [brief use] |
+| Accent | #HEXCODE | [brief use] |
+| Background | #HEXCODE | [brief use] |
+| Text | #HEXCODE | [brief use] |
+
+### Ready-to-Use Prompts
+- "[prompt for generating a typical page/component using this design system]"
+- "[prompt for generating another common element]"
+- "[prompt for generating a third element]"
+```
+
+---
+
+## Error handling
+
+- If no arguments and no flags are provided, enter the **guided** mode (Figma-first flow). Do NOT show help text -- start the Q&A.
+- If `--from-url` is provided without a URL, show: "Please provide a URL after --from-url."
+- If `--from-url` URL is not valid (doesn't start with http:// or https://), show: "Please provide a valid URL starting with http:// or https://"
+- If `--from-figma` URL is not a Figma URL, show: "Please provide a valid Figma URL (e.g., https://figma.com/design/abc123/MyDesign)"
+- If `--from-figma` and Figma MCP fails, show: "Could not access Figma file. Make sure Figma desktop is running with MCP plugin. Try `/design --from-url` or `/design --interactive` instead."
+- If `--update-colors` or `--apply` but no DESIGN.md exists, show: "No DESIGN.md found in the project root. Run `/design` first to generate one."
+- If `--apply` but no design-relevant files found, show: "No CSS, Tailwind config, or theme files found. Would you like me to create one?"
+- If DESIGN.md already exists when generating a new one, ask before overwriting.
+- If `--to-figma` but no DESIGN.md exists, show: "No DESIGN.md found. Run `/design` first to generate one, then use `--to-figma` to push it to Figma."
+- If `--to-figma` or `--sync-figma` and Figma MCP is not available, show: "Figma MCP is not connected. Make sure Figma desktop is running with the MCP plugin enabled, or set up Figma remote MCP."
+- If `--sync-figma` is provided without a URL, show: "Please provide a Figma URL: `/design --sync-figma <figma-url>`"
