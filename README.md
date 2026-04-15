@@ -94,6 +94,18 @@ The skill works without Figma (`--no-figma` mode), but the full interactive flow
 
 此技能可以在沒有 Figma 的情況下運作（`--no-figma` 模式），但完整的互動流程需要：
 
+> ⚠️ **Figma Paid Plan Required** — The Figma Dev Mode MCP Server is **NOT** available on the free Starter plan.
+> You need a **Professional**, **Organization**, or **Enterprise** seat (Dev or Full) to enable the MCP server.
+> See [Figma's plan comparison](https://www.figma.com/pricing/) for details.
+>
+> ⚠️ **需要 Figma 付費方案** — Figma Dev Mode MCP Server **不支援**免費的 Starter 方案。
+> 你需要 **Professional**、**Organization** 或 **Enterprise** 的 Dev 或 Full seat 才能啟用 MCP server。
+> 詳見 [Figma 方案比較](https://www.figma.com/pricing/)。
+>
+> 💡 If you don't have a paid Figma plan, use `/design --no-figma` for text-only DESIGN.md generation, or `/design --from-url <url>` to extract design tokens from any website.
+>
+> 💡 沒有付費方案？可使用 `/design --no-figma` 純文字產生 DESIGN.md，或 `/design --from-url <url>` 從任何網站擷取設計 tokens。
+
 | Tool / 工具 | Purpose / 用途 | Setup / 設定 |
 |---|---|---|
 | **Figma Desktop App** | Required for local Figma MCP / 本地 Figma MCP 必需 | [Download Figma](https://www.figma.com/downloads/) |
