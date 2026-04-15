@@ -62,6 +62,9 @@ The default flow is **Figma-first** and interactive:
 
 # Bidirectional Figma sync / Figma 雙向同步
 /design --sync-figma https://figma.com/design/abc123/MyApp
+
+# Interactive layout assembly / 互動式版面組裝
+/design --layout landing-page
 ```
 
 ## Installation / 安裝
@@ -192,6 +195,7 @@ This skill uses the following Figma MCP tools:
 | `/design --apply` | Apply DESIGN.md tokens to project files / 套用 DESIGN.md 代幣到專案檔案 |
 | `/design --to-figma [url]` | Push DESIGN.md to Figma as visual reference / 將 DESIGN.md 推送到 Figma 作為視覺參考 |
 | `/design --sync-figma <url>` | Bidirectional Figma sync / Figma 雙向同步 |
+| `/design --layout [project-type]` | Interactive layout block-picker (Hero style? Features layout? Pricing?) → updates DESIGN.md sections 1, 4, 5, 9 / 互動式版面區塊拼裝（Hero 風格？Features 排版？）→ 更新 DESIGN.md 的第 1、4、5、9 章節 |
 
 ### Options / 選項
 

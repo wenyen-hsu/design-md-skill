@@ -51,6 +51,11 @@ Other Modes:
   --sync-figma <url>         Interactive sync: read from Figma, refine, push back.
                              Example: /design --sync-figma https://figma.com/design/abc/MyApp
 
+  --layout [project-type]    Interactively assemble page layout from block variants.
+                             Section-by-section Q&A (Hero style? Features layout?),
+                             renders in Figma, updates DESIGN.md sections 1, 4, 5, 9.
+                             Example: /design --layout landing-page
+
 Options:
   --no-figma                 Skip Figma integration, generate DESIGN.md as text only.
   --dark                     Include a dark mode color variant section.
@@ -68,6 +73,7 @@ Examples:
   /design --apply --framework tailwind        Apply tokens to project
   /design --to-figma                          Push DESIGN.md to Figma
   /design --sync-figma https://figma.com/...  Bidirectional Figma sync
+  /design --layout landing-page               Interactive layout block-picker
 ```
 
 ## Instructions
@@ -79,6 +85,7 @@ Parse user input to detect the active mode:
 - If input contains `--apply`, Mode = **apply**.
 - If input contains `--to-figma`, optionally extract a Figma URL after it. Mode = **to-figma**.
 - If input contains `--sync-figma`, extract the Figma URL after it. Mode = **sync-figma**.
+- If input contains `--layout`, Mode = **layout**. Optional argument after it (that is not another flag) is the project type (e.g., `landing-page`, `dashboard`, `e-commerce`, `blog`, `portfolio`, `mobile`).
 - If input contains `--no-figma`, Mode = **generate-text-only**. Any remaining text (excluding other flags) is the description.
 - If input contains `--interactive`, treat as default mode (same as no flags). Mode = **guided**.
 - If none of the above flags are present, Mode = **guided**. If input contains text, use it as a description to skip Q1-Q2 of the Q&A. If input is empty, start the full Q&A.
@@ -833,6 +840,289 @@ Show:
 
 ---
 
+## Mode: Layout Picker (`--layout [project-type]`)
+
+Interactive block-picker flow for assembling page layout. Users answer section-by-section Q&A (Hero style? Features layout? Pricing?) and Claude renders the assembled layout in Figma using the colors from DESIGN.md. This mirrors the color-picking workflow but for composition instead of color.
+
+### Step 1: Determine context
+
+**1a. Check for existing DESIGN.md:**
+- If DESIGN.md exists at the output path:
+  - Parse **colors** from Section 2 (use these in the mockup)
+  - Parse **font family** from Section 3
+  - Parse **project type** from Section 1 (look for "landing page", "dashboard", "e-commerce", "blog", "portfolio", "mobile app" keywords)
+  - Extract the Figma file URL if present as a comment (e.g., `<!-- Figma: https://... -->`)
+- If DESIGN.md does not exist:
+  - Tell the user: "No DESIGN.md found. I'll use placeholder colors for the layout preview. For best results, run `/design` first to establish your color system."
+  - Use neutral placeholder palette: `#0F0F0F` bg, `#1A1A1A` surface, `#F5F0E8` text, `#C4A882` accent
+
+**1b. Determine project type:**
+- If user provided a type after `--layout` (e.g., `--layout landing-page`), use it
+- If DESIGN.md was parsed and contained a type, use it (confirm with user first)
+- Otherwise, ask: "What type of page are we designing the layout for? (landing-page, dashboard, e-commerce, blog, portfolio, mobile)"
+
+**1c. Check Figma MCP availability:**
+- Call `mcp__figma__whoami` to verify connection
+- If it fails, show: "⚠️ Layout picker requires Figma MCP. Ensure Figma Desktop with the MCP plugin is running, or set up Figma Remote MCP. See README for setup."
+
+### Step 2: Block-picker Q&A
+
+Use the block library for the chosen project type. Ask one slot at a time. After each answer, acknowledge briefly and move to the next. Accept letter answers (A, B, C), variant names, free-text descriptions, or "skip" where skippable.
+
+#### Block library
+
+**Landing page:**
+| Slot | Variants |
+|---|---|
+| **Navigation** | A: Minimal (logo + 3 links)  ·  B: Full (logo + links + CTA)  ·  C: Sticky transparent  ·  D: Centered (logo center, links sides) |
+| **Hero** | A: Centered (label + H1 + sub + CTA)  ·  B: Split left/right (text ↔ media)  ·  C: Media background (full-bleed + overlay)  ·  D: Product showcase (text + product mockup) |
+| **Features** | A: 3-column cards  ·  B: 2×2 grid  ·  C: Alternating rows (zigzag)  ·  D: Horizontal scroll |
+| **Social proof** | A: Single testimonial quote  ·  B: 3-quote grid  ·  C: Logo bar  ·  D: Stats row  ·  E: Skip |
+| **Pricing** | A: 3-tier cards  ·  B: Comparison table  ·  C: Skip |
+| **FAQ** | A: Accordion  ·  B: 2-col grid  ·  C: Skip |
+| **CTA Section** | A: Full-width banner  ·  B: Centered card  ·  C: Skip |
+| **Footer** | A: Minimal  ·  B: Columns (grouped links)  ·  C: Centered (logo + social + copyright) |
+
+**Dashboard:**
+| Slot | Variants |
+|---|---|
+| **Sidebar** | A: Collapsed icons only  ·  B: Full with labels  ·  C: Right-side panel  ·  D: Skip (top-nav only) |
+| **Top bar** | A: Search-forward (large search + avatar)  ·  B: Title + actions (breadcrumb + CTAs)  ·  C: Minimal (avatar only) |
+| **Stat cards** | A: 4 cards row  ·  B: 2×2 grid  ·  C: Single featured + 3 small  ·  D: Skip |
+| **Main content** | A: Chart + table split  ·  B: Full-width chart  ·  C: Data table only  ·  D: Card grid |
+| **Secondary panels** | A: Right sidebar activity feed  ·  B: Bottom tabs  ·  C: Skip |
+
+**E-commerce:**
+| Slot | Variants |
+|---|---|
+| **Navigation** | A: Mega menu with categories  ·  B: Simple nav + search  ·  C: Sidebar categories + top nav |
+| **Hero banner** | A: Full-width campaign image  ·  B: Slider carousel  ·  C: Split (product + text CTA) |
+| **Categories** | A: Circle icons row  ·  B: Image tile grid  ·  C: Skip |
+| **Product grid** | A: 4-col grid  ·  B: 3-col grid  ·  C: 2-col (larger tiles) |
+| **Promo banner** | A: Full-width accent strip  ·  B: Side-by-side dual promo  ·  C: Skip |
+| **Footer** | A: Columns (shop / help / about)  ·  B: Minimal + newsletter  ·  C: Centered brand |
+
+**Blog / Portfolio:**
+| Slot | Variants |
+|---|---|
+| **Navigation** | A: Minimal (logo + links)  ·  B: Centered brand  ·  C: Sidebar (left) |
+| **Hero** | A: Featured post with image  ·  B: Text-only intro  ·  C: Project/post grid teaser |
+| **Content grid** | A: 3-col cards  ·  B: 2-col magazine layout  ·  C: Single column long-form  ·  D: Masonry grid |
+| **About / bio** | A: Right-side sidebar  ·  B: Full-width section  ·  C: Skip |
+| **Footer** | A: Minimal  ·  B: Columns  ·  C: Centered |
+
+**Mobile app (390×844):**
+| Slot | Variants |
+|---|---|
+| **Status bar** | A: Standard time/battery  ·  B: Hidden |
+| **Header** | A: Title + menu icon  ·  B: Back + title + action  ·  C: Search-integrated  ·  D: Large title (iOS style) |
+| **Content cards** | A: List with dividers  ·  B: Card grid 2-col  ·  C: Vertical story feed  ·  D: Horizontal card scroll |
+| **Bottom nav** | A: 4-tab with icons  ·  B: 5-tab with center action (FAB)  ·  C: Skip |
+
+#### Example Q&A interaction
+
+```
+Navigation — which style?
+  A) Minimal (logo + 3 links)
+  B) Full (logo + links + CTA button)
+  C) Sticky transparent
+  D) Centered
+
+Your choice? → user replies "B"
+✓ Full navigation with CTA.
+
+Hero — which style?
+  A) Centered
+  B) Split left/right
+  C) Media background
+  D) Product showcase
+
+Your choice? → user replies "split"
+✓ Split hero with text ↔ media.
+
+...
+```
+
+Maintain an internal `layout_plan` object as you collect answers:
+```
+{
+  "project_type": "landing-page",
+  "slots": [
+    { "slot": "nav", "variant": "B" },
+    { "slot": "hero", "variant": "B" },
+    { "slot": "features", "variant": "A" },
+    ...
+  ]
+}
+```
+
+### Step 3: Preview in Figma
+
+**3a. Determine target Figma file:**
+- If DESIGN.md has a Figma URL comment, use that file (extract `fileKey`)
+- Otherwise, call `mcp__figma__create_new_file` with `fileName: "Design System - [project folder name]"` (same as Guided Flow Step 4b)
+
+**3b. Create the layout preview page:**
+Use `mcp__figma__use_figma` to:
+1. Create a new page: `Preview - [project type] (Custom Layout)`
+2. Switch to it via `await figma.setCurrentPageAsync(page)`
+3. Create a main viewport frame (1440px wide for desktop, 390px for mobile, height grows with content) with the DESIGN.md background color
+4. For each slot in the `layout_plan`, render the chosen variant as a named child frame (e.g., frame name `Nav (Full)`, `Hero (Split)`, `Features (2x2 Grid)`). Name format: `[Slot] ([Variant])`
+5. Stack frames vertically using absolute positioning (same pattern as existing preview pages — do NOT use auto-layout FILL, it errors inside the MCP)
+6. Apply DESIGN.md colors throughout (background, surface, primary, accent, text hierarchy)
+7. Use the font family from DESIGN.md (load with `figma.loadFontAsync`)
+8. Call `figma.viewport.scrollAndZoomIntoView([viewport])`
+
+**3c. Show to user:**
+- Optionally call `mcp__figma__get_screenshot` to grab the page
+- Display the Figma URL and summarize the assembled sections:
+  > "Your layout preview is ready: [Figma URL]
+  >
+  > Assembled sections:
+  > 1. Navigation (Full)
+  > 2. Hero (Split)
+  > 3. Features (3-column cards)
+  > 4. Testimonial (3-quote grid)
+  > 5. Pricing (3-tier cards)
+  > 6. Footer (Columns)
+  >
+  > Options:
+  > - Say **'change [slot] to [variant]'** to swap a section (e.g., 'change hero to centered')
+  > - Say **'swap [slot] and [slot]'** to reorder (e.g., 'swap features and pricing')
+  > - Say **'remove [slot]'** to hide a section
+  > - Say **'refresh layout'** to re-read the current Figma structure (useful if you manually rearranged frames)
+  > - Say **'ready'** to update DESIGN.md with the final layout"
+
+### Step 4: Refinement loop
+
+Wait for the user's next message. Handle these instructions:
+
+**`change [slot] to [variant]`** — swap one slot's variant:
+1. Update `layout_plan.slots` — find the slot, change variant
+2. Call `mcp__figma__use_figma` to delete the old frame (match by slot name prefix) and render the new variant at the same Y-position
+3. Shift subsequent frames' Y-positions if the new variant has different height
+4. Confirm change to user
+
+**`swap [slotA] and [slotB]`** — reorder two sections:
+1. Swap their positions in `layout_plan.slots`
+2. Call `mcp__figma__use_figma` to clear the viewport and re-render all frames in the new order
+3. Confirm change
+
+**`remove [slot]`** or **`skip [slot]`** — hide a section:
+1. Remove from `layout_plan.slots`
+2. Clear viewport and re-render remaining frames stacked continuously
+3. Confirm
+
+**`refresh layout`** — reconcile with user's manual Figma edits:
+1. Use `mcp__figma__use_figma` to list children of the preview page (read their names and Y positions)
+2. Parse each frame name `[Slot] ([Variant])` into a slot/variant pair
+3. Sort by Y-position to get the new order
+4. Rebuild `layout_plan.slots` from the parsed frames
+5. Show user the inferred plan:
+   > "Read current Figma layout:
+   > 1. Nav (Full)
+   > 2. Hero (Split)
+   > 3. Features (2x2 Grid)   ← you swapped this in
+   > 4. Footer (Minimal)
+   > Pricing removed. Keep this plan?"
+6. On confirm, the internal `layout_plan` is now synced; wait for next instruction
+
+**`ready`** — exit loop:
+Proceed to Step 5.
+
+### Step 5: Update DESIGN.md
+
+Update four sections of DESIGN.md to reflect the confirmed `layout_plan`. Leave other sections untouched.
+
+**Section 1 (Visual Theme & Atmosphere):**
+Append 1-2 sentences describing the compositional feel. Examples based on chosen variants:
+- Split hero + 2×2 features: "The composition leads with a split hero that balances text and imagery, resolving through a dual-column feature grid — a rhythm of paired symmetry throughout."
+- Centered hero + zigzag features: "A centered opening anchors the page, yielding to alternating zigzag content sections that create a gentle, breathing cadence."
+- Media background hero + horizontal scroll features: "An immersive media-led hero gives way to horizontally scrolling feature tiles — cinematic and exploratory."
+
+**Section 4 (Component Stylings):**
+For each chosen variant, add or replace the relevant subsection with concrete measurements. Examples:
+
+```markdown
+### Hero (Split)
+- **Structure:** 50/50 text-column ↔ media-column
+- **Section padding:** 120px vertical, 80px horizontal
+- **Column gap:** 60px
+- **Text column:** max-width 560px, left-aligned
+- **Media column:** aspect ratio 4:3, border-radius 8px
+
+### Features (3-column cards)
+- **Grid:** 3 equal columns, 32px gap
+- **Card:** 400px max-width, 6px border-radius, 40px internal padding
+- **Card background:** surface color
+- **Card border:** 1px secondary accent at 30% opacity
+
+### Pricing (3-tier cards)
+- **Grid:** 3 cards, 24px gap
+- **Recommended tier:** primary-color 2px border, subtle accent tint
+- **Card padding:** 48px vertical, 36px horizontal
+- **Tier name:** H3, 20px semibold
+- **Price:** 48px bold, primary color
+```
+
+Cover Buttons, Cards, Navigation, Inputs as before, but tailor specs to the chosen variants.
+
+**Section 5 (Layout Principles):**
+Replace generic layout content with the plan-specific structure:
+
+```markdown
+### Grid & Structure
+- **Max content width:** 1440px
+- **Viewport padding:** 80px horizontal on desktop, 24px on mobile
+- **Grid system:** 12-column with 32px gutters
+
+### Section Order
+1. Navigation (Full)
+2. Hero (Split)
+3. Features (3-column cards)
+4. Social Proof (3-quote grid)
+5. Pricing (3-tier cards)
+6. CTA Section (Centered card)
+7. Footer (Columns)
+
+### Section Spacing
+- **Between major sections:** 120-140px vertical
+- **Within section content:** 60px between title row and content rows
+- **Card/component gap:** 32px
+
+### Rhythm
+[Description matching the variants chosen — e.g., "The split hero sets a horizontal balance that the 3-col features continue, before pricing anchors back with vertical symmetry."]
+```
+
+**Section 9 (Agent Prompt Guide):**
+Add a layout-specific ready-to-use prompt to the prompts list:
+```markdown
+- "Build a [project type] with the following sections in order: [section order from plan]. Use the DESIGN.md colors, typography, and the exact variant specs in Section 4. Apply the section spacing rules from Section 5."
+```
+
+Write the updated DESIGN.md to disk.
+
+### Step 6: Summary
+
+Show:
+- Final section order (numbered list)
+- Figma URL with the layout preview page highlighted
+- DESIGN.md path and which sections were updated (1, 4, 5, 9)
+- Next steps:
+  > "Your layout is locked in. Next you can:
+  > - `/design --apply` to push the tokens and layout specs to your project's CSS/Tailwind config
+  > - `/design --layout` again to experiment with a different composition (previous preview page will be reused)
+  > - `/design --update-colors` to tweak colors against this new layout"
+
+### Error handling (specific to `--layout`)
+
+- `--layout` and Figma MCP not available → "Layout picker requires Figma MCP. Either set up Figma (see README) or describe your layout preferences manually — I can still update DESIGN.md sections 4 and 5 based on your description."
+- `--layout <invalid-type>` → "Supported project types: landing-page, dashboard, e-commerce, blog, portfolio, mobile. Which matches your project?"
+- `refresh layout` but no preview page exists → "No layout preview page found. Let's start with Step 2 Q&A to assemble one."
+- User input that matches no slot or variant → ask them to clarify, suggest the closest match
+
+---
+
 ## Mode: Interactive Figma Sync (`--sync-figma`)
 
 This is the most interactive mode. It creates a bidirectional workflow where you pick/adjust colors in Figma, Claude reads them back, and generates an accurate DESIGN.md. Great for designers who want to visually explore colors before committing.
@@ -1129,3 +1419,6 @@ and the intended feeling for users.]
 - If `--to-figma` but no DESIGN.md exists, show: "No DESIGN.md found. Run `/design` first to generate one, then use `--to-figma` to push it to Figma."
 - If `--to-figma` or `--sync-figma` and Figma MCP is not available, show: "Figma MCP is not connected. Make sure Figma desktop is running with the MCP plugin enabled, or set up Figma remote MCP."
 - If `--sync-figma` is provided without a URL, show: "Please provide a Figma URL: `/design --sync-figma <figma-url>`"
+- If `--layout` is used with an unsupported project type, show: "Supported types: landing-page, dashboard, e-commerce, blog, portfolio, mobile. Which matches your project?"
+- If `--layout` is used and Figma MCP is not available, show: "Layout picker requires Figma MCP. Either set up Figma (see README) or describe your layout preferences manually — I can still update DESIGN.md sections 4 and 5 from your description."
+- If user says `refresh layout` but no layout preview page exists, show: "No layout preview page found. Let's start with the block-picker Q&A to build one."
