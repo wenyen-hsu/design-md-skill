@@ -1468,229 +1468,136 @@ and the intended feeling for users.]
 
 ---
 
-## Mode: Video Layout (`--video-layout`)
+## Mode: Video Layout (`--video-layout [--target <path>]`)
 
-Interactive **storyboard-based** scene picker for assembling Remotion video compositions. Mirrors `--layout landing-page` for visual fidelity: as the user picks each scene, Figma renders a horizontal **storyboard** of 1920×1080 (or chosen aspect) frames so the user sees the composition take shape in real time. Real animation preview happens later via `npm run dev` (Remotion Studio).
+One command for all video design work. Behavior depends on whether `--target` is provided:
 
-Output is written to DESIGN.md as **Section 10: Video Compositions** (or to a separate `VIDEO.md` if `--split` is passed).
+- **Without `--target`**：從零開始 — 互動選場景 + 配色 → Figma 預覽 → ready → 寫 DESIGN.md Section 10 → scaffold Remotion 專案
+- **With `--target <remotion-project-path>`**：修改已有影片 — 讀入既有 composition → 分幀截圖上傳 Figma → 使用者在 Figma 改配色/layout → ready → 讀回 → 更新 design-tokens.ts → 重 render
 
-This mode pairs with the `remotion` skill (`~/.claude/skills/remotion/`). The scene preset enum, props shape, and design-tokens schema are defined in `~/.claude/skills/remotion/references/design-tokens-bridge.md` — that file is the single source of truth. **When you change preset names here, also update that file.**
+This mode pairs with the `remotion` skill (`~/.claude/skills/remotion/`). The scene preset enum and design-tokens schema are defined in `~/.claude/skills/remotion/references/design-tokens-bridge.md`.
 
-### Step 1: Determine context
+### Step 1: Route — 有 `--target` 還是沒有？
 
-**1a. Check for existing DESIGN.md:**
-- If DESIGN.md exists at the output path:
-  - Parse colors from Section 2 (use these as `tokens.colors`)
-  - Parse font family from Section 3 (use as `tokens.typography.fontFamily`)
-  - If Section 10 already exists, parse the current `scenes` list and offer to extend or replace it
-- If DESIGN.md does not exist:
-  - Tell the user: "No DESIGN.md found. I'll use neutral defaults (`#0b0d12` bg, `#fde047` primary, system font). For better results, run `/design` first."
+**If `--target <path>` is provided** → 走 **Path A（修改已有影片）**
+**If no `--target`** → 走 **Path B（從零開始）**
 
-**1b. Check `--split` flag:**
-- If `--split` is present, write to `VIDEO.md` (separate file) instead of appending Section 10 to DESIGN.md.
-- Default: append/update Section 10 in DESIGN.md.
+---
 
-**1c. Load the block library:**
-- Read `video-blocks.md` in the skill directory to display the 8 scene presets.
+## Path A：修改已有影片（`--video-layout --target <path>`）
 
-**1d. Check Figma MCP availability:**
-- Call `mcp__figma__whoami` to verify connection.
-- If it fails, show: "⚠️ Video storyboard requires Figma MCP. You can still pick scenes blind and I'll write Section 10 from your text answers — but you won't see a visual storyboard until you run `npm run dev` in the Remotion project after apply. Continue without Figma? (yes/no)"
-- If user declines, abort. If accepts, skip the Figma rendering steps; treat all `change/swap` commands as text-only updates to `video_plan`.
+### A1: 讀取目標 Remotion 專案
 
-### Step 2: Initial setup Q&A
+1. 驗證 `<path>` 是 Remotion 專案（`<path>/package.json` 含 `remotion`）
+2. 讀取 `<path>/DESIGN.md`（或 `<path>/src/design-tokens.ts`，擇一存在即可）
+3. 如果**都沒有** → 告知使用者：「目標專案沒有 DESIGN.md，先幫你建一份配色。」→ 引導走配色選擇（複用 `--update-colors` 的 Q&A 流程）→ 寫入 `<path>/DESIGN.md` Section 2 + 3 → 繼續
 
-Ask one question at a time. Maintain an internal `video_plan` object as you go:
+### A2: 讀取既有 composition 並分幀截圖
 
-```jsonc
-{
-  "meta":   { "name": "My Video", "width": 1920, "height": 1080, "fps": 30 },
-  "scenes": [],
-  "transition": { "type": "fade", "durationInFrames": 15 }
-}
+1. 列出所有 composition：`cd <path> && npx remotion compositions`
+2. 如果有多個 composition，問使用者要修改哪一個
+3. 對選定的 composition 取代表性截圖（每個 scene 抽一幀）：
+   ```bash
+   npx remotion still <compositionId> scene1.png --frame=0
+   npx remotion still <compositionId> scene2.png --frame=<scene2_start_frame>
+   ...
+   ```
+   Scene 的分界幀數從 `<path>/src/design-tokens.ts` 的 `scenes` 陣列算出。如果沒有 `design-tokens.ts`，就均分總幀數。
+
+### A3: 上傳截圖到 Figma storyboard
+
+1. Check Figma MCP：`mcp__figma__whoami`。若不可用，顯示截圖（inline image）讓使用者文字指示修改。
+2. 建立（或重用）Figma file：`mcp__figma__create_new_file` → `"Video Edit - [compositionId]"`
+3. 建立 storyboard page + color palette page：
+   - **Storyboard page**：把截圖橫排（一個 frame per scene），標示 scene 編號 + preset + duration
+   - **Color Palette page**：從 DESIGN.md Section 2 讀出色票，建立可編輯的色票 + Figma Variables（同之前的色票渲染邏輯）
+4. 顯示 Figma URL：
+   > "已將影片分幀上傳到 Figma：[URL]
+   >
+   > 你可以在 Figma 中：
+   > - 直接修改色票（Color Palette 頁的 Variables）
+   > - 在 Storyboard 頁看到每個場景的靜態截圖
+   >
+   > 修改完成後告訴我 `ready`。"
+
+### A4: 使用者在 Figma 修改 + 文字指令
+
+等待使用者回應。接受以下指令：
+
+- **`ready`** → 進入 A5
+- **`change scene N to <preset>`** → 更新 `design-tokens.ts` 的 `scenes[N]` preset（重問 props）
+- **`swap scene A and B`** → 調整 scenes 順序
+- **`recolor primary to #ff0066`** → 更新 DESIGN.md Section 2 + Figma Variables
+- **`extend scene N to S seconds`** → 更新 durationInFrames
+- **`refresh`** → 讀回 Figma Variables 的最新色值，顯示變更
+
+### A5: 讀回 Figma + 更新 + 重 render
+
+1. 呼叫 `mcp__figma__get_variable_defs` 讀回最新色值
+2. 顯示 before/after 色值差異
+3. 更新：
+   - `<path>/DESIGN.md` Section 2（色票）+ Section 10（場景如有改動）
+   - `<path>/src/design-tokens.ts`（colors + scenes）
+4. 問使用者是否要立即重 render：
+   > "設計已更新。要重新 render 影片嗎？（yes/skip）"
+5. 如果 yes：
+   ```bash
+   cd <path> && npx remotion render <compositionId> out/<compositionId>.mp4
+   ```
+6. 顯示完成訊息 + 輸出路徑
+
+---
+
+## Path B：從零開始（`--video-layout`，無 `--target`）
+
+### B1: 確認環境
+
+1. 讀取當前目錄的 `DESIGN.md`（如果有 → 取 Section 2 配色 + Section 3 字型）
+2. 如果沒有 `DESIGN.md` → 告知使用者：「沒有 DESIGN.md，先選配色。」→ 引導 Q&A（複用 `--update-colors` 流程）→ 寫入 `DESIGN.md` Section 2 + 3
+3. Check Figma MCP：`mcp__figma__whoami`（不可用就走純文字模式）
+4. Load `video-blocks.md`（8 個場景 preset 描述）
+
+### B2: 互動問答
+
+逐一問：
+1. **用途** — social-short / presentation / product-demo / podcast / custom（建議預設組合）
+2. **長寬比** — 1920×1080 / 1080×1920 / 1080×1080
+3. **fps** — 30（預設）/ 24 / 60
+4. **場景數** — 3-8
+5. **逐場景選 preset + 填 props + 設 duration**（每選一個立刻在 Figma 渲染該 scene frame）
+
+### B3: Figma storyboard 即時渲染
+
+每選一個場景：
+1. 在 Figma 建對應 frame（橫排 flow），用 DESIGN.md 配色渲染靜態版
+2. 場景間標示轉場（fade ▶ / wipe ⇨ / 等）
+3. 同時建 Color Palette page
+
+### B4: Refinement loop
+
+```
+change scene N to <preset> / swap / add / remove / recolor / extend / refresh storyboard / ready
 ```
 
-**Setup questions (before scene picking):**
+### B5: 寫入 DESIGN.md
 
-1. **Purpose** — `social-short / presentation / product-demo / podcast / custom`
-   - Suggest default scene combo from `video-blocks.md` "影片用途 → 場景組合建議" table; user can accept or override.
-2. **Aspect ratio** — `1920×1080 (landscape) / 1080×1920 (portrait) / 1080×1080 (square)`. Set `meta.width` / `meta.height`.
-3. **fps** — `30 (default) / 24 / 60`. Set `meta.fps`.
-4. **Number of scenes** — 3-8. (After Step 4 storyboard, user can `add scene` / `remove scene` to adjust.)
-5. **Composition name** — short identifier (PascalCase preferred). Set `meta.name`.
+使用者說 `ready` 後：
+1. 確認配色 + 字型 + 轉場
+2. 寫入 DESIGN.md Section 10（Video Compositions）
+3. 問使用者要不要 scaffold 到 Remotion 專案：
+   > "Section 10 已寫入。要 scaffold 到 Remotion 專案嗎？給我路徑（或 `skip`）。"
+4. 如果給路徑 → 寫入 `design-tokens.ts` + scene 元件 + `Root.tsx` append Composition
+5. 建議 `npm run dev` 預覽 + `npx remotion render` 輸出
 
-### Step 3: Storyboard preview setup in Figma
+---
 
-(Skip this step entirely if Figma MCP unavailable — proceed straight to Step 4 text-only.)
+## 共用：Error handling
 
-**3a. Determine target Figma file:**
-- If DESIGN.md has a Figma URL comment, use that file (extract `fileKey`).
-- Otherwise, call `mcp__figma__create_new_file` with `fileName: "Video Storyboard - [meta.name]"`.
-
-**3b. Create the storyboard page:**
-Use `mcp__figma__use_figma` to:
-1. Create a new page named `Storyboard - [meta.name]`.
-2. Switch to it via `await figma.setCurrentPageAsync(page)`.
-3. Load the font from DESIGN.md Section 3 with `figma.loadFontAsync`.
-
-The storyboard will be a **horizontal flow** of scene frames (one per scene), each at the chosen aspect ratio, separated by a 120px gap representing the transition. Total flow width = `numberOfScenes × meta.width + (numberOfScenes − 1) × 120`. Use absolute positioning (no auto-layout FILL).
-
-### Step 4: Per-scene picker with live storyboard
-
-For each scene 1..N (where N from Step 2 question 4):
-
-**4a. Ask for preset:**
-```
-Scene K — choose a preset:
-  A) hero-title       (大標 + 副標)
-  B) kinetic-type     (逐字大字)
-  C) stagger-list     (列表)
-  D) split-media      (左影片右字)
-  E) fullscreen-video (全螢幕影片)
-  F) quote-card       (引言)
-  G) big-numbers      (大數字)
-  H) logo-cta         (Outro)
-```
-
-**4b. Ask for props** (preset-specific):
-- `hero-title` → title (string), subtitle (optional string)
-- `kinetic-type` → text (string), staggerFrames (optional, default 3)
-- `stagger-list` → items (rows of `tag | label | (optional) color`)
-- `split-media` → src (URL or `placeholder`), title, body, flipped (yes/no)
-- `fullscreen-video` → src, overlay (optional), volume (0-1, default 0.6)
-- `quote-card` → quote, author, role (optional)
-- `big-numbers` → stats (rows of `value | label`, 2-4 entries)
-- `logo-cta` → cta, logoSrc (optional)
-
-**4c. Ask for duration in seconds** (convert to frames using `meta.fps`).
-
-**4d. Append to `video_plan.scenes`** with auto-generated `id` (e.g., `scene1`, `scene2` or `intro`, `features` if user named it).
-
-**4e. Render this scene as a Figma frame:**
-
-If Figma MCP available, immediately:
-1. Create a frame at position `(K-1) * (meta.width + 120)` x-offset, `0` y, named `Scene K — [preset] ([id])`, sized `meta.width × meta.height`.
-2. Apply DESIGN.md background color (or token default `#0b0d12`).
-3. Render a static representation of the preset using DESIGN.md colors & typography — see preset-to-Figma rendering recipes in `video-blocks.md`. Keep it simple: this is a storyboard, not a live preview.
-   - `hero-title`: accent bar (yellow) + title text (large) + subtitle (medium muted).
-   - `kinetic-type`: large text centered, primary color background, bg color text.
-   - `stagger-list`: numbered colored squares + label text rows.
-   - `split-media`: 50/50 split — placeholder rectangle on one side, title+body on other.
-   - `fullscreen-video`: full-bleed dark rectangle + bottom-left overlay text.
-   - `quote-card`: large `"` glyph + quote text + author.
-   - `big-numbers`: row of large value + small uppercase label below.
-   - `logo-cta`: centered logo (or star placeholder) + pill CTA below.
-4. Add a small "K — preset" label above the frame for storyboard navigation.
-5. Between scenes, render a small ▶ glyph or arrow at the gap indicating the transition type and direction.
-6. Call `figma.viewport.scrollAndZoomIntoView([newFrame])` on the latest frame so user can see it appear.
-
-**4f. Confirm to user:**
-> ✓ Scene K (`preset`) added to storyboard. [Continue with Scene K+1 / change scene K to ... / done]
-
-After all N scenes are placed, scroll to fit the entire storyboard:
-`figma.viewport.scrollAndZoomIntoView([frame1, frame2, ..., frameN])`.
-
-### Step 5: Refinement loop
-
-Show user the full storyboard URL and accepted commands:
-
-> "Storyboard ready: [Figma URL]
->
-> Scenes:
-> 1. hero-title — `intro` (5s)
-> 2. stagger-list — `features` (7s)
-> 3. quote-card — `quote` (6s)
-> 4. logo-cta — `outro` (4s)
->
-> Commands:
-> - **`change scene N to <preset>`** — swap a scene's preset (re-prompt for props, re-render that frame)
-> - **`swap scene A and B`** — reorder (re-render entire storyboard)
-> - **`extend scene N to S seconds`** — adjust duration (re-render frame label)
-> - **`add scene <preset> at position N`** / **`remove scene N`** — re-render storyboard
-> - **`recolor primary to #ff0066`** — update token, re-render all frames
-> - **`set transition fade|wipe|slide|flip|none`** — re-render gap glyphs
-> - **`refresh storyboard`** — re-read frames from Figma (if user manually rearranged)
-> - **`ready`** — proceed to color/font/transition confirm + write DESIGN.md"
-
-For each command:
-- Update `video_plan` first.
-- If Figma MCP available, re-render only the affected frames (whole storyboard for `swap`, `recolor`, `set transition`).
-- Confirm change.
-
-`refresh storyboard` mirrors `--layout` Step 4's `refresh layout`: list children of the storyboard page, parse names `Scene K — [preset] ([id])`, sort by x-position, rebuild `video_plan.scenes`. Show inferred order, confirm.
-
-### Step 6: Confirm tokens (color / font / transition)
-
-After `ready`:
-
-1. **Color palette** — Reuse `--update-colors` flow if user wants changes; otherwise inherit Section 2.
-2. **Typography** — Confirm font family (system / Inter / Noto Sans TC / Google Font name).
-3. **Transition** — Confirm `none / fade / wipe / slide / flip`. Timing: spring (`damping: 200`) or linear (15 frames default).
-4. If colors or font changed, re-render entire Figma storyboard one final time.
-
-### Step 7: Write to DESIGN.md (or VIDEO.md)
-
-Append or update **Section 10: Video Compositions**:
-
-```markdown
-## 10. Video Compositions
-
-Aspect: 1920×1080 · 30 fps · Total: 18s (540 frames)
-
-### Tokens
-Reuses Section 2 colors and Section 3 typography. Scene-only tokens:
-- `transition.type`: fade
-- `transition.durationInFrames`: 15
-
-### Scenes
-
-| # | id       | preset         | duration | props |
-|---|----------|----------------|----------|-------|
-| 1 | intro    | hero-title     | 5s (150f) | `{ title: "歡迎來到 Remotion", subtitle: "用 React 寫影片" }` |
-| 2 | features | stagger-list   | 7s (210f) | `{ items: [{tag:"01", label:"快速", color:"#22d3ee"}, ...] }` |
-| 3 | quote    | quote-card     | 6s (180f) | `{ quote: "改變了我的工作流", author: "王小明", role: "Frontend Lead" }` |
-| 4 | outro    | logo-cta       | 4s (120f) | `{ cta: "立即試用" }` |
-
-### Apply
-
-Run `/design --apply --framework remotion --target <remotion-project-path>` to scaffold:
-- `src/design-tokens.ts` — colors / typography / spacing / scenes
-- `src/scenes/<Preset>.tsx` — scene components for each preset used
-- `src/scenes/VideoFromTokens.tsx` — composes scenes into a TransitionSeries
-- `src/Root.tsx` — registers a new `<Composition>` (existing compositions preserved)
-
-See `~/.claude/skills/remotion/references/design-tokens-bridge.md` for full token contract.
-```
-
-### Step 8: Suggest next action — apply + Studio
-
-After writing Section 10, prompt:
-
-> Section 10 saved. Apply to a Remotion project now? Reply with the project path or `skip`.
-> Example: `/Users/me/projects/my-video`
-
-If user supplies a path, transition to `--apply --framework remotion --target <path>` (Mode: Apply to Project, see Remotion branch). After apply finishes successfully:
-
-**Auto-launch Remotion Studio for animation preview:**
-1. Print: "Storyboard captured the static composition. To see real animations + transitions, opening Remotion Studio…"
-2. Run `npm run dev` in the target path **as a background process** (not blocking — user keeps interacting with you).
-3. After ~3 seconds, print the Studio URL (default `http://localhost:3000`) and the new composition id (`http://localhost:3000/<meta.name>`).
-4. Suggest:
-   > Studio is running at http://localhost:3000/<meta.name>.
-   > - Click play to see the real animation
-   > - Edit any scene component in `src/scenes/` and the Studio hot-reloads
-   > - When you're happy: `npx remotion render <meta.name> out/<meta.name>.mp4`
-
-If user passes `--no-studio` or replies that they'd rather not launch Studio, skip step 2-4 and just print the suggested commands.
-
-### Error handling (specific to `--video-layout`)
-
-- If user picks `split-media` / `fullscreen-video` but provides no `src` URL or staticFile path: prompt for a value, accept `placeholder` to use a stock URL.
-- If duration < 30 frames (1s @ 30fps): warn and require ≥ 30.
-- If total duration > 600 frames at 30fps and Lambda not configured: warn that local render may be slow, recommend `--codec=h264 --scale=0.5` for previews.
-- If `change scene N` references invalid index: list current scenes with their indices.
-- If Figma MCP fails mid-flow (after Step 3 succeeded but a later render call fails): warn "Figma MCP dropped — continuing in text-only mode. Storyboard frames after Scene K may not appear."
-- If `npm run dev` fails to launch (no `dev` script, port 3000 busy): print the error, suggest `npx remotion studio --port 3001` as fallback.
+- `--target` 路徑不存在或非 Remotion 專案 → "找不到 Remotion 專案。請確認路徑。"
+- Figma MCP 不可用 → 降級為純文字模式（截圖 inline 顯示，指令回寫檔案但不走 Figma）
+- `split-media` / `fullscreen-video` 沒給 `src` → 提示給值或用 `placeholder`
+- `change scene N` 超出範圍 → 列出有效 index
+- render 失敗 → 顯示錯誤，建議 `--log=verbose` 排查
 
 ---
 
