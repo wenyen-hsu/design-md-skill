@@ -65,6 +65,12 @@ The default flow is **Figma-first** and interactive:
 
 # Interactive layout assembly / 互動式版面組裝
 /design --layout landing-page
+
+# Video scene picker with Figma storyboard / 影片場景拼裝 + Figma 分鏡預覽
+/design --video-layout
+
+# Apply design tokens to Remotion project / 套用設計到 Remotion 影片專案
+/design --apply --framework remotion --target ./
 ```
 
 ## Installation / 安裝
@@ -196,6 +202,8 @@ This skill uses the following Figma MCP tools:
 | `/design --to-figma [url]` | Push DESIGN.md to Figma as visual reference / 將 DESIGN.md 推送到 Figma 作為視覺參考 |
 | `/design --sync-figma <url>` | Bidirectional Figma sync / Figma 雙向同步 |
 | `/design --layout [project-type]` | Interactive layout block-picker (Hero style? Features layout? Pricing?) → updates DESIGN.md sections 1, 4, 5, 9 / 互動式版面區塊拼裝（Hero 風格？Features 排版？）→ 更新 DESIGN.md 的第 1、4、5、9 章節 |
+| `/design --video-layout` | Interactive **video scene-picker** for Remotion (8 scene presets + colors + transitions) → updates DESIGN.md Section 10 / 互動式**影片場景拼裝**（8 個場景 preset + 配色 + 轉場）→ 更新 DESIGN.md 第 10 章節 |
+| `/design --apply --framework remotion --target <path>` | Scaffold Remotion project: writes `src/design-tokens.ts` + scene components + Root.tsx Composition / 為 Remotion 專案 scaffold：寫入 `src/design-tokens.ts` + 場景元件 + Root.tsx Composition |
 
 ### Options / 選項
 
@@ -204,7 +212,34 @@ This skill uses the following Figma MCP tools:
 | `--dark` | Include dark mode variant / 包含深色模式變體 |
 | `--framework <name>` | Target framework: `tailwind`, `css-vars`, `remotion` / 目標框架 |
 | `--output <path>` | Output path (default: `./DESIGN.md`) / 輸出路徑 |
+| `--target <path>` | (with `--apply`) Project path to apply tokens to / （搭 `--apply`）套用代幣的目標專案路徑 |
+| `--split` | (with `--video-layout`) Write to separate `VIDEO.md` / （搭 `--video-layout`）寫入獨立 `VIDEO.md` |
+| `--force` | (with `--apply`) Overwrite existing scene component files / （搭 `--apply`）覆寫既有場景元件 |
+| `--dry-run` | (with `--apply`) Show what would change without writing / （搭 `--apply`）只顯示變動不寫檔 |
 | `--help` | Show help / 顯示說明 |
+
+### Remotion Integration / Remotion 整合
+
+If the user has the [`remotion` skill](https://github.com/wenyen-hsu/remotion-skill) installed at `~/.claude/skills/remotion/`, this skill can drive a full design-to-video pipeline:
+
+若使用者安裝了 [`remotion` skill](https://github.com/wenyen-hsu/remotion-skill) 在 `~/.claude/skills/remotion/`，本 skill 可驅動完整 design-to-video pipeline：
+
+```
+1. /design --video-layout
+   → 互動選 4-8 個場景 preset (hero-title / kinetic-type / stagger-list / split-media / fullscreen-video / quote-card / big-numbers / logo-cta)
+   → 配色、字型、轉場
+   → 寫入 DESIGN.md Section 10
+
+2. /design --apply --framework remotion --target /path/to/remotion-project
+   → 自動產出 src/design-tokens.ts、scene 元件、VideoFromTokens.tsx
+   → Root.tsx 自動 append 一個 <Composition>
+
+3. cd /path/to/remotion-project && npm run dev   # 預覽
+   npx remotion render <id> out/video.mp4         # 輸出 MP4
+```
+
+Scene preset enum + token schema 的 single source of truth：
+`~/.claude/skills/remotion/references/design-tokens-bridge.md`
 
 ## DESIGN.md Format / DESIGN.md 格式
 
