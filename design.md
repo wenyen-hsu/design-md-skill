@@ -711,73 +711,12 @@ Scan the project to detect the framework and find design-relevant files:
 3. **Theme files** — look for `theme.{js,ts}`, `src/theme.{js,ts}`. If found:
    - Update theme object with design tokens
 
-4. **Remotion** — look for `remotion.config.ts` or check `package.json` for remotion dependency. If found, OR if `--framework remotion` is passed explicitly:
-   - This is the **Remotion branch** — see Step 3a below.
+4. **Remotion** — look for `remotion.config.ts` or check `package.json` for remotion dependency. If found:
+   - Suggest a constants file `src/design-tokens.ts` exporting all tokens as JS constants
+   - Suggest inline style patterns using these constants
+   - For full video scaffold, direct user to `/design --video-layout --target <path>`
 
 Use `--framework` flag as an override if provided.
-
-### Step 3a: Remotion branch (`--framework remotion --target <path>`)
-
-When `--framework remotion` is passed (or auto-detected):
-
-**3a-i. Validate target:**
-- Resolve `<path>` (default: current directory).
-- Check `<path>/package.json` exists and contains `"remotion"` in `dependencies`.
-- If not a Remotion project: ask user to confirm path or run `npx create-video@latest` first.
-
-**3a-ii. Load video plan:**
-- Read DESIGN.md Section 10 (or `VIDEO.md` if `--split` was used). Extract `meta`, `scenes`, `transition`.
-- Read Section 2 → `tokens.colors`. Read Section 3 → `tokens.typography`. Read Section 6 (if exists) → `tokens.spacing`, fallback to `{xs:8, sm:16, md:32, lg:48, xl:96}`.
-- Build the full `designTokens` object per the schema in `~/.claude/skills/remotion/references/design-tokens-bridge.md` Section 1.
-
-**3a-iii. Plan files to write:**
-
-| Path | Action | Notes |
-|------|--------|-------|
-| `<path>/src/design-tokens.ts` | overwrite (with diff confirmation) | Full tokens const |
-| `<path>/src/scenes/zodSchemas.ts` | overwrite | Validation schema for scenes |
-| `<path>/src/scenes/<PresetName>.tsx` | **create only if missing** (skip + warn if exists, unless `--force`) | One file per preset used in `scenes` |
-| `<path>/src/scenes/VideoFromTokens.tsx` | overwrite | Composer component (TransitionSeries + scene switch) |
-| `<path>/src/Root.tsx` | **append-only codemod** | Add one `<Composition>`; preserve all existing compositions |
-
-Source the scene component templates from `~/.claude/skills/remotion/assets/snippets/layouts/<preset>.tsx` (8 files). Each is already designed to import `../design-tokens`.
-
-**3a-iv. Show diff and confirm:**
-- For `design-tokens.ts`, `zodSchemas.ts`, `VideoFromTokens.tsx`: show full file content (or diff if exists).
-- For new scene components: show one-line "will create".
-- For Root.tsx: show the snippet to be appended (the new `<Composition>` block).
-- Wait for user confirmation. Skip confirmation if `--yes` is passed.
-
-**3a-v. Write files:**
-- Apply changes in order: tokens → schemas → scene components → composer → Root.tsx.
-- For Root.tsx codemod: parse the existing JSX fragment in `RemotionRoot`, append a new `<Composition>` element before the closing `</>`. Do NOT touch existing compositions.
-
-**3a-vi. Print summary:**
-```
-✓ Wrote 6 files:
-  - src/design-tokens.ts (overwrote)
-  - src/scenes/zodSchemas.ts (created)
-  - src/scenes/HeroTitle.tsx (created)
-  - src/scenes/StaggerList.tsx (created)
-  - src/scenes/QuoteCard.tsx (skipped — exists; pass --force to overwrite)
-  - src/scenes/LogoCta.tsx (created)
-  - src/scenes/VideoFromTokens.tsx (overwrote)
-  - src/Root.tsx (appended Composition id="MyVideo")
-
-Next:
-  cd <path>
-  npm run dev                   # Studio 預覽
-  npx remotion render MyVideo out/video.mp4
-```
-
-### Flags
-
-- `--framework remotion` — explicit framework override (skip auto-detection)
-- `--target <path>` — Remotion project path (default: cwd)
-- `--force` — overwrite existing scene component files
-- `--dry-run` — show what would change, write nothing
-- `--yes` — skip per-file confirmation
-- `--split` (when generating, not applying) — output `VIDEO.md` instead of DESIGN.md Section 10
 
 ### Step 4: Show proposed changes
 
