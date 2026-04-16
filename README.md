@@ -55,7 +55,7 @@ The default flow is **Figma-first** and interactive:
 /design --update-colors "warmer tones, switch to green"
 
 # Apply tokens to project files / 套用設計到專案檔案
-/design --apply --framework tailwind
+/design --apply
 
 # Push DESIGN.md to Figma / 將 DESIGN.md 推送到 Figma
 /design --to-figma
@@ -212,7 +212,6 @@ This skill uses the following Figma MCP tools:
 | Option / 選項 | Description / 說明 |
 |---|---|
 | `--dark` | Include dark mode variant / 包含深色模式變體 |
-| `--framework <name>` | Target framework: `tailwind`, `css-vars`, `remotion` / 目標框架 |
 | `--output <path>` | Output path (default: `./DESIGN.md`) / 輸出路徑 |
 | `--target <path>` | (with `--video-layout`) Existing Remotion project to modify / （搭 `--video-layout`）要修改的既有 Remotion 專案路徑 |
 | `--help` | Show help / 顯示說明 |
@@ -252,6 +251,7 @@ The generated DESIGN.md follows the [Google Stitch format](https://stitch.withgo
 7. **Do's and Don'ts** — Design guardrails / 設計準則
 8. **Responsive Behavior** — Breakpoints, touch targets / 響應式行為
 9. **Agent Prompt Guide** — Quick reference for AI agents / AI 代理快速參考
+10. **Video Compositions** *(optional)* — Scene presets, transitions, duration for Remotion videos / 影片場景、轉場、時長（Remotion 用）
 
 ### Example / 範例
 
@@ -429,7 +429,7 @@ flowchart TD
         PARSE_TOKENS --> DETECT_FW{"偵測框架"}
         DETECT_FW -->|"Tailwind"| APPLY_TW["更新 tailwind.config<br/>colors/fonts/spacing/radii/shadows"]
         DETECT_FW -->|"CSS"| APPLY_CSS["更新 :root {} CSS 變數<br/>+ dark mode 區塊"]
-        DETECT_FW -->|"Remotion"| APPLY_REM["建立 src/design-tokens.ts"]
+        DETECT_FW -->|"Remotion"| APPLY_REM["建議使用<br/>/design --video-layout --target"]
         DETECT_FW -->|"Theme file"| APPLY_THEME["更新 theme.js/ts"]
         DETECT_FW -->|"找不到"| APPLY_CREATE["❓ 詢問是否建立<br/>CSS 變數檔 或 Tailwind config"]
         APPLY_TW --> SHOW_DIFF_A["顯示 diff → 確認 → 套用"]
@@ -549,9 +549,10 @@ flowchart TD
 | `/design --from-figma https://figma.com/...` | Extract from Figma file / 從 Figma 擷取 | Required / 需要 |
 | `/design --update-colors "warmer"` | Update existing palette / 更新色票 | Optional / 選用 |
 | `/design --apply` | Apply tokens to source files / 套用到原始碼 | Not needed / 不需要 |
-| `/design --apply --framework tailwind` | Apply with framework hint / 指定框架套用 | Not needed / 不需要 |
 | `/design --to-figma` | Push DESIGN.md to Figma / 推送到 Figma | Required / 需要 |
 | `/design --sync-figma https://figma.com/...` | Bidirectional sync / 雙向同步 | Required / 需要 |
+| `/design --video-layout` | Create new video: scenes + colors → Figma storyboard / 從零建影片 | Required / 需要 |
+| `/design --video-layout --target <path>` | Modify existing video: read frames → Figma → re-render / 修改已有影片 | Required / 需要 |
 | `/design --dark` | Any mode + dark variant / 包含深色模式 | -- |
 | `/design --help` | Show help / 顯示說明 | -- |
 
